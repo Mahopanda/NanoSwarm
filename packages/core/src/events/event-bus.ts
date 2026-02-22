@@ -4,6 +4,8 @@ export type EventMap = {
   'step-finish': { stepNumber: number; text: string; finishReason: string };
   'message': { role: string; content: string; contextId: string };
   'error': { message: string; stack?: string };
+  'subagent-start': { taskId: string; label: string; task: string };
+  'subagent-finish': { taskId: string; label: string; result: string };
 };
 
 type Listener<T> = (data: T) => void;
