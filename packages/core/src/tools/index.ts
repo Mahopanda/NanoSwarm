@@ -6,3 +6,4 @@ export { createExecTool } from './shell.ts';
 export type { ExecToolOptions } from './shell.ts';
 export { createWebSearchTool, createWebFetchTool } from './web.ts';
 export type { WebSearchOptions, WebFetchOptions } from './web.ts';
+export { createMessageTool } from './message.ts';
