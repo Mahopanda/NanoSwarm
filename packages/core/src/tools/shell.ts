@@ -9,6 +9,27 @@ export interface ExecToolOptions {
   maxOutputLength?: number;
 }
 
+const SENSITIVE_ENV_PREFIXES = [
+  'OPENAI_', 'ANTHROPIC_', 'GEMINI_', 'GOOGLE_API_', 'BRAVE_',
+  'AWS_SECRET', 'AZURE_', 'GCP_', 'GROQ_', 'HF_TOKEN', 'HUGGING',
+];
+const SENSITIVE_ENV_KEYS = [
+  'DATABASE_URL', 'SECRET_KEY', 'PRIVATE_KEY',
+  'API_KEY', 'TOKEN', 'PASSWORD', 'CREDENTIAL',
+];
+
+function filterEnv(): Record<string, string> {
+  const filtered: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (v === undefined) continue;
+    const upper = k.toUpperCase();
+    if (SENSITIVE_ENV_PREFIXES.some((p) => upper.startsWith(p))) continue;
+    if (SENSITIVE_ENV_KEYS.some((s) => upper.includes(s))) continue;
+    filtered[k] = v;
+  }
+  return filtered;
+}
+
 const DEFAULT_DENY_PATTERNS: RegExp[] = [
   /rm\s+-rf\s+[\/~]/,
   /\bformat\s+[a-zA-Z]:/,
@@ -66,7 +87,7 @@ export function createExecTool(options: ExecToolOptions = {}): NanoTool {
         cwd: context.workspace,
         stdout: 'pipe',
         stderr: 'pipe',
-        env: { ...process.env },
+        env: filterEnv(),
       });
 
       // Race between process completion and timeout

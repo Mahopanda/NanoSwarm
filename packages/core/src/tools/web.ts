@@ -3,6 +3,36 @@ import { Readability } from '@mozilla/readability';
 import { parseHTML } from 'linkedom';
 import type { NanoTool, ToolContext } from './base.ts';
 
+const BLOCKED_HOSTS = new Set(['localhost', 'metadata.google.internal']);
+
+function checkSsrf(url: string): string | null {
+  const parsed = new URL(url);
+  const hostname = parsed.hostname;
+
+  if (BLOCKED_HOSTS.has(hostname)) {
+    return `Blocked: internal host '${hostname}'`;
+  }
+
+  // Block IPv4 private/loopback/link-local ranges
+  if (/^127\./.test(hostname) || hostname === '[::1]') {
+    return `Blocked: loopback address`;
+  }
+  if (/^10\./.test(hostname) || /^192\.168\./.test(hostname)) {
+    return `Blocked: private IP range`;
+  }
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(hostname)) {
+    return `Blocked: private IP range`;
+  }
+  if (/^169\.254\./.test(hostname)) {
+    return `Blocked: link-local address`;
+  }
+  if (/^0\./.test(hostname)) {
+    return `Blocked: reserved IP range`;
+  }
+
+  return null;
+}
+
 export interface WebSearchOptions {
   apiKey?: string;
 }
@@ -115,6 +145,12 @@ export function createWebFetchTool(options: WebFetchOptions = {}): NanoTool {
 
       if (!['http:', 'https:'].includes(parsed.protocol)) {
         return `Error: Only http and https URLs are supported. Got: ${parsed.protocol}`;
+      }
+
+      // SSRF protection: block private/internal addresses
+      const ssrfError = checkSsrf(params.url);
+      if (ssrfError) {
+        return JSON.stringify({ error: ssrfError, url: params.url });
       }
 
       let response: Response;

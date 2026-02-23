@@ -39,9 +39,13 @@ export class ContextBuilder {
       }
     }
 
-    // 3. Memory context
-    const memory = await this.memoryStore.getMemory(contextId);
+    // 3. Memory context (capped to prevent system prompt overflow)
+    const MAX_MEMORY_CHARS = 8000; // ~2000 tokens
+    let memory = await this.memoryStore.getMemory(contextId);
     if (memory) {
+      if (memory.length > MAX_MEMORY_CHARS) {
+        memory = memory.slice(0, MAX_MEMORY_CHARS) + '\n\n[... truncated]';
+      }
       sections.push(`## Memory\n\n${memory}`);
     }
 
