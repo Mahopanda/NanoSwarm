@@ -1,9 +1,9 @@
 import { mkdir, writeFile, readFile, copyFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { ask, select, confirm } from '../utils/prompt.ts';
+import { confirm, closePrompt } from '../utils/prompt.ts';
 import { bold, green, dim, yellow } from '../utils/print.ts';
-import { defaultConfig, PROVIDER_DEFAULTS } from '../templates/config.ts';
+import { defaultConfig } from '../templates/config.ts';
 import { BOOTSTRAP_FILES, MEMORY_FILES, CLAWHUB_SKILL_PATH } from '../templates/bootstrap.ts';
 
 const CONFIG_DIR = join(homedir(), '.nanoswarm');
@@ -113,49 +113,40 @@ export function getClawHubSourceDir(): string {
 }
 
 export async function runOnboard(): Promise<void> {
-  console.log(bold('\nNanoSwarm Setup Wizard\n'));
+  console.log(bold('\nNanoSwarm Setup\n'));
 
   // Check existing config
   if (await fileExists(CONFIG_PATH)) {
-    const overwrite = await confirm(
-      `${yellow('Config already exists at')} ${CONFIG_PATH}. Overwrite?`,
-      false,
-    );
-    if (!overwrite) {
-      console.log(dim('Keeping existing config.'));
-      return;
+    // If running without TTY (e.g. Docker), skip confirmation and refresh
+    if (!process.stdin.isTTY) {
+      console.log(dim('Config already exists. Refreshing workspace files.'));
+    } else {
+      const overwrite = await confirm(
+        `${yellow('Config already exists at')} ${CONFIG_PATH}. Overwrite?`,
+        false,
+      );
+      closePrompt();
+      if (!overwrite) {
+        console.log(dim('Keeping existing config.'));
+        return;
+      }
     }
+  } else {
+    // Create default config with placeholder
+    await mkdir(CONFIG_DIR, { recursive: true });
+    const workspace = join(CONFIG_DIR, 'workspace');
+    const config = defaultConfig({
+      provider: 'gemini',
+      apiKey: 'YOUR_API_KEY',
+      model: 'gemini-2.0-flash',
+      workspace,
+    });
+    await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+    console.log(`${green('+')} ${CONFIG_PATH}`);
   }
-
-  // Provider
-  const provider = await select('Select LLM provider:', [
-    'gemini',
-    'anthropic',
-    'openai',
-  ]);
-
-  // API Key
-  const apiKey = await ask(`Enter ${provider} API key`);
-  if (!apiKey) {
-    console.log(yellow('API key is required. Aborting.'));
-    return;
-  }
-
-  // Model
-  const defaultModel = PROVIDER_DEFAULTS[provider] ?? 'gemini-2.0-flash';
-  const model = await ask('Model ID', defaultModel);
-
-  // Workspace
-  const defaultWorkspace = join(CONFIG_DIR, 'workspace');
-  const workspace = await ask('Workspace path', defaultWorkspace);
-
-  // Write config
-  await mkdir(CONFIG_DIR, { recursive: true });
-  const config = defaultConfig({ provider, apiKey, model, workspace });
-  await writeFile(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', 'utf-8');
-  console.log(`\n${green('+')} ${CONFIG_PATH}`);
 
   // Scaffold workspace
+  const workspace = join(CONFIG_DIR, 'workspace');
   console.log(`\n${bold('Creating workspace:')}`);
   await scaffoldWorkspace(workspace, getClawHubSourceDir());
 
@@ -164,8 +155,8 @@ export async function runOnboard(): Promise<void> {
 ${green(bold('Setup complete!'))}
 
 ${bold('Next steps:')}
-  1. Edit ${dim(join(workspace, 'SOUL.md'))} to customize your agent
-  2. Run ${bold('nanoswarm status')} to verify
-  3. Run ${bold('nanoswarm agent')} to start chatting
+  1. Add your API key to ${dim(CONFIG_PATH)}
+  2. Edit ${dim(join(workspace, 'SOUL.md'))} to customize your agent
+  3. Run ${bold('nanoswarm gateway')} to start
 `);
 }

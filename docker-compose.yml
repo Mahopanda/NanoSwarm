@@ -1,17 +1,27 @@
+x-common: &common
+  build: .
+  volumes:
+    - "${NANOSWARM_HOME:-~/.nanoswarm}:/root/.nanoswarm"
+
 services:
   gateway:
-    build: .
+    <<: *common
     ports:
       - "${PORT:-4000}:4000"
-    volumes:
-      - "${NANOSWARM_HOME:-~/.nanoswarm}:/root/.nanoswarm"
+    command: ["gateway"]
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1G
+        reservations:
+          cpus: "0.25"
+          memory: 256M
 
   cli:
-    build: .
+    <<: *common
     profiles: ["cli"]
     stdin_open: true
     tty: true
-    volumes:
-      - "${NANOSWARM_HOME:-~/.nanoswarm}:/root/.nanoswarm"
-    command: ["agent"]
+    command: ["status"]

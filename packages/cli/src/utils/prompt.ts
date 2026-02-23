@@ -1,23 +1,61 @@
 import * as readline from 'node:readline';
 
-const rl = () =>
-  readline.createInterface({
+let iface: readline.Interface | null = null;
+let lineBuffer: string[] = [];
+let lineResolvers: Array<(line: string) => void> = [];
+let eofReached = false;
+
+function ensureInterface(): void {
+  if (iface) return;
+  iface = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
+    terminal: process.stdin.isTTY ?? false,
   });
+  iface.on('line', (line) => {
+    const resolver = lineResolvers.shift();
+    if (resolver) {
+      resolver(line);
+    } else {
+      lineBuffer.push(line);
+    }
+  });
+  iface.on('close', () => {
+    eofReached = true;
+    // Resolve any remaining waiters with empty string
+    for (const resolver of lineResolvers) {
+      resolver('');
+    }
+    lineResolvers = [];
+  });
+}
+
+function nextLine(): Promise<string> {
+  if (lineBuffer.length > 0) {
+    return Promise.resolve(lineBuffer.shift()!);
+  }
+  if (eofReached) {
+    return Promise.resolve('');
+  }
+  return new Promise<string>((resolve) => {
+    lineResolvers.push(resolve);
+  });
+}
+
+export function closePrompt(): void {
+  iface?.close();
+  iface = null;
+  lineBuffer = [];
+  lineResolvers = [];
+  eofReached = false;
+}
 
 export async function ask(question: string, defaultValue?: string): Promise<string> {
+  ensureInterface();
   const suffix = defaultValue ? ` (${defaultValue})` : '';
-  const iface = rl();
-  try {
-    return await new Promise<string>((resolve) => {
-      iface.question(`${question}${suffix}: `, (answer) => {
-        resolve(answer.trim() || defaultValue || '');
-      });
-    });
-  } finally {
-    iface.close();
-  }
+  process.stdout.write(`${question}${suffix}: `);
+  const answer = await nextLine();
+  return answer.trim() || defaultValue || '';
 }
 
 export async function confirm(question: string, defaultYes = true): Promise<boolean> {
