@@ -134,7 +134,18 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
       channelManager.register(new CLIChannel(config.channels.cli, bus));
     }
     if (config.channels.telegram?.enabled) {
-      channelManager.register(new TelegramChannel(config.channels.telegram, bus));
+      const telegramChannel = new TelegramChannel(config.channels.telegram, bus);
+
+      // Wire AdminProvider from primary agent
+      const primaryAgent = agents[0];
+      telegramChannel.setAdminProvider({
+        getStatus: () => primaryAgent.getStatus(),
+        getRunningTasks: () => primaryAgent.getRunningTasks(),
+        cancelTask: (id) => primaryAgent.cancelTask(id),
+        getRecentLogs: (count, filter) => primaryAgent.getRecentLogs(count, filter),
+      });
+
+      channelManager.register(telegramChannel);
     }
 
     // Inbound consumer loop: bus → orchestrator → bus.outbound

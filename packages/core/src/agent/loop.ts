@@ -17,7 +17,7 @@ export class AgentLoop {
     contextId: string,
     userMessage: string,
     history?: Array<{ role: 'user' | 'assistant'; content: string }>,
-    opts?: { channel?: string; chatId?: string },
+    opts?: { channel?: string; chatId?: string; abortSignal?: AbortSignal },
   ): Promise<AgentLoopResult> {
     // 1. Build system prompt + messages
     const { system, messages } = await this.contextBuilder.buildMessages(
@@ -47,6 +47,7 @@ export class AgentLoop {
         stopWhen: stepCountIs(this.config.maxIterations ?? 15),
         temperature: this.config.temperature ?? 0.7,
         maxOutputTokens: this.config.maxTokens ?? 4096,
+        abortSignal: opts?.abortSignal,
         onStepFinish: (step) => {
           this.eventBus.emit('step-finish', {
             stepNumber: step.stepNumber,

@@ -1,4 +1,5 @@
 // @nanoswarm/channels — barrel export
+export type { AdminProvider, AgentStatus } from './admin.ts';
 export type {
   NormalizedMessage,
   NormalizedResponse,

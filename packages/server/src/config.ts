@@ -23,7 +23,7 @@ export interface NanoSwarmConfig {
   };
   channels?: {
     cli?: { enabled: boolean; prompt?: string; allowFrom?: string[] };
-    telegram?: { enabled: boolean; token: string; allowFrom?: string[] };
+    telegram?: { enabled: boolean; token: string; allowFrom?: string[]; adminUsers?: string[] };
   };
   tools?: {
     web?: { search?: { apiKey: string } };

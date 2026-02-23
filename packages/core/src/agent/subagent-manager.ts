@@ -25,7 +25,7 @@ export interface SubagentTask {
 }
 
 export class SubagentManager {
-  private running = new Map<string, { label: string; promise: Promise<AgentLoopResult> }>();
+  private running = new Map<string, { label: string; promise: Promise<AgentLoopResult>; abortController: AbortController }>();
 
   constructor(
     private config: AgentLoopConfig,
@@ -57,8 +57,11 @@ export class SubagentManager {
     // Emit start event
     this.eventBus.emit('subagent-start', { taskId, label: resolvedLabel, task });
 
-    // Run in background
-    const promise = loop.run(resolvedContextId, task + SUBAGENT_SYSTEM_SUFFIX).then(
+    // Run in background with AbortController
+    const abortController = new AbortController();
+    const promise = loop.run(resolvedContextId, task + SUBAGENT_SYSTEM_SUFFIX, undefined, {
+      abortSignal: abortController.signal,
+    }).then(
       (result) => {
         this.eventBus.emit('subagent-finish', {
           taskId,
@@ -70,7 +73,7 @@ export class SubagentManager {
       },
     );
 
-    this.running.set(taskId, { label: resolvedLabel, promise });
+    this.running.set(taskId, { label: resolvedLabel, promise, abortController });
 
     return `Subagent [${resolvedLabel}] started (id: ${taskId})`;
   }
@@ -84,5 +87,14 @@ export class SubagentManager {
       taskId,
       label,
     }));
+  }
+
+  cancelTask(taskId: string): boolean {
+    const task = this.running.get(taskId);
+    if (!task) return false;
+    task.abortController.abort();
+    this.running.delete(taskId);
+    this.eventBus.emit('subagent-finish', { taskId, label: task.label, result: 'Cancelled' });
+    return true;
   }
 }

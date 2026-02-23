@@ -19,6 +19,7 @@ import type { AgentLoopConfig, AgentLoopResult } from './types.ts';
 import type { ExecToolOptions } from '../tools/shell.ts';
 import type { MCPServerConfig, MCPConnection } from '../mcp/types.ts';
 import { connectMCPServers, disconnectMCPServers } from '../mcp/client.ts';
+import { LogBuffer } from './log-buffer.ts';
 
 export interface AgentConfig {
   model: LanguageModel;
@@ -56,12 +57,21 @@ export class Agent {
   private consolidator: MemoryConsolidator;
   private config: AgentConfig;
   private mcpConnections: MCPConnection[] = [];
+  private logBuffer: LogBuffer;
+
+  // Stats tracking
+  private startTime = Date.now();
+  private messagesProcessed = 0;
+  private errorsCount = 0;
+  private processingState: { since: number; sender: string } | null = null;
+  private lastActivityAt = Date.now();
 
   constructor(config: AgentConfig) {
     this.config = config;
 
-    // 1. EventBus
+    // 1. EventBus + LogBuffer
     this.eventBus = new EventBus();
+    this.logBuffer = LogBuffer.attach(this.eventBus);
 
     // 2. Memory & History stores (use injected stores or fallback to file-based)
     this.stores = config.stores ?? null;
@@ -219,7 +229,62 @@ export class Agent {
       };
     }
 
-    return this.loop.run(contextId, message, history, opts);
+    this.processingState = { since: Date.now(), sender: opts?.chatId ?? contextId };
+    this.lastActivityAt = Date.now();
+
+    try {
+      const result = await this.loop.run(contextId, message, history, opts);
+      this.messagesProcessed++;
+      return result;
+    } catch (err) {
+      this.errorsCount++;
+      throw err;
+    } finally {
+      this.processingState = null;
+      this.lastActivityAt = Date.now();
+    }
+  }
+
+  getStatus(): {
+    running: boolean;
+    idle: boolean;
+    processingSeconds: number;
+    currentSender: string | null;
+    lastActivityAgo: number;
+    messagesProcessed: number;
+    errorsCount: number;
+    uptimeSeconds: number;
+    runningAgents: Array<{ taskId: string; label: string }>;
+    cronJobs: number;
+  } {
+    const now = Date.now();
+    return {
+      running: true,
+      idle: this.processingState === null,
+      processingSeconds: this.processingState
+        ? Math.floor((now - this.processingState.since) / 1000)
+        : 0,
+      currentSender: this.processingState?.sender ?? null,
+      lastActivityAgo: Math.floor((now - this.lastActivityAt) / 1000),
+      messagesProcessed: this.messagesProcessed,
+      errorsCount: this.errorsCount,
+      uptimeSeconds: Math.floor((now - this.startTime) / 1000),
+      runningAgents: this.subagentManager.getRunningTasks(),
+      cronJobs: this.cronService?.listJobs().length ?? 0,
+    };
+  }
+
+  getRunningTasks(): Array<{ taskId: string; label: string }> {
+    return this.subagentManager.getRunningTasks();
+  }
+
+  cancelTask(taskId: string): boolean {
+    return this.subagentManager.cancelTask(taskId);
+  }
+
+  getRecentLogs(count: number, filter?: 'error'): string[] {
+    if (filter) return this.logBuffer.filter(filter);
+    return this.logBuffer.tail(count);
   }
 
   async resetSession(
