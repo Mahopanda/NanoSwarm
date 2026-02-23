@@ -9,3 +9,4 @@ export * from './agent/index.ts';
 export * from './cron/index.ts';
 export * from './heartbeat/index.ts';
 export * from './store/index.ts';
+export * from './mcp/index.ts';

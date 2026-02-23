@@ -19,7 +19,7 @@ export interface NanoSwarmServer {
   app: Express;
   agent: Agent;
   start: (port?: number) => Promise<void>;
-  stop: () => void;
+  stop: () => Promise<void>;
 }
 
 export async function createServer(config: ServerConfig): Promise<NanoSwarmServer> {
@@ -92,8 +92,8 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
           resolve();
         });
       }),
-    stop: () => {
-      agent.stop();
+    stop: async () => {
+      await agent.stop();
     },
   };
 }

@@ -17,6 +17,8 @@ import { CronService } from '../cron/service.ts';
 import { HeartbeatService } from '../heartbeat/service.ts';
 import type { AgentLoopConfig, AgentLoopResult } from './types.ts';
 import type { ExecToolOptions } from '../tools/shell.ts';
+import type { MCPServerConfig, MCPConnection } from '../mcp/types.ts';
+import { connectMCPServers, disconnectMCPServers } from '../mcp/client.ts';
 
 export interface AgentConfig {
   model: LanguageModel;
@@ -30,6 +32,7 @@ export interface AgentConfig {
   temperature?: number;
   maxTokens?: number;
   execOptions?: ExecToolOptions;
+  mcpServers?: Record<string, MCPServerConfig>;
 }
 
 export class Agent {
@@ -52,6 +55,7 @@ export class Agent {
   private heartbeatService: HeartbeatService | null;
   private consolidator: MemoryConsolidator;
   private config: AgentConfig;
+  private mcpConnections: MCPConnection[] = [];
 
   constructor(config: AgentConfig) {
     this.config = config;
@@ -140,6 +144,11 @@ export class Agent {
     const skillsDir = this.config.skillsDir ?? join(this.config.workspace, '.nanoswarm', 'skills');
     await this._skillLoader.loadAll(skillsDir);
 
+    // Connect MCP servers
+    if (this.config.mcpServers && Object.keys(this.config.mcpServers).length > 0) {
+      this.mcpConnections = await connectMCPServers(this.config.mcpServers, this.registry);
+    }
+
     // Start CronService
     if (this.cronService) {
       await this.cronService.start();
@@ -151,7 +160,11 @@ export class Agent {
     }
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
+    if (this.mcpConnections.length > 0) {
+      await disconnectMCPServers(this.mcpConnections, this.registry);
+      this.mcpConnections = [];
+    }
     if (this.cronService) {
       this.cronService.stop();
     }
