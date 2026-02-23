@@ -10,6 +10,7 @@ export interface AgentHandle {
     contextId: string,
     text: string,
     history?: Array<{ role: 'user' | 'assistant'; content: string }>,
+    opts?: { channel?: string; chatId?: string },
   ): Promise<AgentResult>;
 }
 

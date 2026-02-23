@@ -102,7 +102,29 @@ export class Agent {
     if (cronEnabled) {
       const cronStoreDir = config.cronStoreDir ?? join(config.workspace, '.nanoswarm');
       this.cronService = new CronService(cronStoreDir, async (job) => {
-        const result = await this.loop.run('cron', job.payload.message);
+        // Direct deliver: send message as-is without agent processing
+        if (job.payload.kind === 'direct_deliver') {
+          if (job.payload.deliver && job.payload.to) {
+            this.eventBus.emit('cron-deliver', {
+              channel: job.payload.channel ?? 'cli',
+              chatId: job.payload.to,
+              content: job.payload.message,
+            });
+          }
+          return job.payload.message;
+        }
+
+        // Agent turn: process through agent loop
+        const result = await this.loop.run(`cron:${job.id}`, job.payload.message);
+
+        if (job.payload.deliver && job.payload.to) {
+          this.eventBus.emit('cron-deliver', {
+            channel: job.payload.channel ?? 'cli',
+            chatId: job.payload.to,
+            content: result.text,
+          });
+        }
+
         return result.text;
       });
     } else {
@@ -178,6 +200,7 @@ export class Agent {
     contextId: string,
     message: string,
     history?: Array<{ role: 'user' | 'assistant'; content: string }>,
+    opts?: { channel?: string; chatId?: string },
   ): Promise<AgentLoopResult> {
     // Handle /new command
     if (message.trim() === '/new') {
@@ -196,7 +219,7 @@ export class Agent {
       };
     }
 
-    return this.loop.run(contextId, message, history);
+    return this.loop.run(contextId, message, history, opts);
   }
 
   async resetSession(

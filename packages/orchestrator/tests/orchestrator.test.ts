@@ -62,7 +62,10 @@ describe('Orchestrator', () => {
       const response = await orchestrator.handle(createMessage('Hello!'));
 
       expect(response.text).toBe('Response to: Hello!');
-      expect(agent.handle).toHaveBeenCalledWith('conv-1', 'Hello!');
+      expect(agent.handle).toHaveBeenCalledWith('conv-1', 'Hello!', undefined, {
+        channel: 'rest',
+        chatId: undefined,
+      });
     });
 
     it('should throw when no agent is registered', async () => {
@@ -147,7 +150,10 @@ describe('Orchestrator', () => {
       );
 
       expect(response.text).toBe('Response to: Hello');
-      expect(agent2.handle).toHaveBeenCalledWith('conv-1', 'Hello');
+      expect(agent2.handle).toHaveBeenCalledWith('conv-1', 'Hello', undefined, {
+        channel: 'rest',
+        chatId: undefined,
+      });
       expect(agent1.handle).not.toHaveBeenCalled();
     });
 

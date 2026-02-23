@@ -118,7 +118,18 @@ export class TelegramChannel extends BaseChannel {
     const senderId = this.extractSenderId(ctx);
     const text = ctx.message?.text ?? '';
 
-    if (!text) return;
+    // Skip non-text messages (stickers, voice, photos, etc.)
+    if (!text) {
+      const msg = ctx.message;
+      if (msg && ('sticker' in msg || 'voice' in msg || 'photo' in msg || 'video' in msg || 'animation' in msg)) {
+        try {
+          await ctx.reply('Sorry, I can only process text messages at the moment.');
+        } catch {
+          // Ignore reply errors
+        }
+      }
+      return;
+    }
 
     // Start typing indicator
     this.startTyping(chatId);

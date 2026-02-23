@@ -5,6 +5,8 @@ export interface ToolContext {
   workspace: string;
   contextId: string;
   allowedDir?: string;
+  channel?: string;
+  chatId?: string;
 }
 
 export interface NanoTool {

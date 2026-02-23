@@ -7,7 +7,11 @@ export interface CronSchedule {
 }
 
 export interface CronPayload {
+  kind: 'agent_turn' | 'direct_deliver';
   message: string;
+  deliver: boolean;
+  channel?: string;
+  to?: string;
 }
 
 export interface CronJobState {

@@ -37,7 +37,10 @@ export class Orchestrator implements MessageHandler {
     this.taskManager.updateState(task.id, 'working');
 
     try {
-      const result = await agent.handle(message.conversationId, message.text);
+      const result = await agent.handle(message.conversationId, message.text, undefined, {
+        channel: message.channelId,
+        chatId: message.metadata?.chatId as string | undefined,
+      });
       this.taskManager.updateState(task.id, 'completed');
       return {
         text: result.text,

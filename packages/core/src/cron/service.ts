@@ -33,6 +33,10 @@ export class CronService {
     schedule: CronSchedule;
     message: string;
     deleteAfterRun?: boolean;
+    payloadKind?: 'agent_turn' | 'direct_deliver';
+    deliver?: boolean;
+    channel?: string;
+    to?: string;
   }): CronJob {
     const now = Date.now();
     const job: CronJob = {
@@ -40,7 +44,13 @@ export class CronService {
       name: opts.name,
       enabled: true,
       schedule: opts.schedule,
-      payload: { message: opts.message },
+      payload: {
+        kind: opts.payloadKind ?? 'agent_turn',
+        message: opts.message,
+        deliver: opts.deliver ?? false,
+        channel: opts.channel,
+        to: opts.to,
+      },
       state: {
         nextRunAtMs: this.computeNextRun(opts.schedule, now),
       },

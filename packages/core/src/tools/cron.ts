@@ -7,17 +7,21 @@ export function createCronTool(service: CronService): NanoTool {
   return {
     name: 'cron',
     description:
-      'Manage scheduled tasks. Actions: add (create a new scheduled job), list (show all jobs), remove (delete a job by ID).',
+      'Schedule reminders, recurring tasks, and periodic agent jobs. ' +
+      "Set task_type='direct' for simple reminders (message sent as-is). " +
+      "Set task_type='agent' for complex tasks that need agent processing (web_search, etc.). " +
+      'Actions: add, list, remove.',
     parameters: z.object({
       action: z.enum(['add', 'list', 'remove']).describe('The action to perform'),
-      message: z.string().optional().describe('Task message for the scheduled job (required for add)'),
+      message: z.string().optional().describe('Message or instruction for the agent to execute when the job fires (for add). Can be a simple reminder or a complex instruction.'),
       every_seconds: z.number().optional().describe('Run every N seconds (for add with interval schedule)'),
       cron_expr: z.string().optional().describe('Cron expression (for add with cron schedule)'),
       tz: z.string().optional().describe('Timezone for cron expression (e.g., "Asia/Taipei")'),
       at: z.string().optional().describe('ISO datetime string for one-time execution (for add with at schedule)'),
       job_id: z.string().optional().describe('Job ID (required for remove)'),
+      task_type: z.enum(['direct', 'agent']).optional().describe("Job type: 'direct' sends the message as-is (for reminders), 'agent' processes through the agent loop (for complex tasks). Default: direct"),
     }),
-    execute: async (params) => {
+    execute: async (params, context) => {
       switch (params.action) {
         case 'add': {
           if (!params.message) {
@@ -42,11 +46,16 @@ export function createCronTool(service: CronService): NanoTool {
             return 'Error: one of every_seconds, cron_expr, or at is required for add';
           }
 
+          const payloadKind = params.task_type === 'agent' ? 'agent_turn' as const : 'direct_deliver' as const;
           const job = service.addJob({
             name: params.message.slice(0, 50),
             schedule,
             message: params.message,
             deleteAfterRun,
+            payloadKind,
+            deliver: true,
+            channel: context.channel,
+            to: context.chatId,
           });
 
           return `Job added: ${job.id} (${job.name})`;

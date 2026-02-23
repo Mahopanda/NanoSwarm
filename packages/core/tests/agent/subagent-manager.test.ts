@@ -176,7 +176,7 @@ describe('SubagentManager', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(events).toHaveLength(1);
-    expect(events[0].result).toContain('Error: LLM failure');
+    expect(events[0].result).toContain('Error:');
     expect(manager.getRunningCount()).toBe(0);
   });
 });

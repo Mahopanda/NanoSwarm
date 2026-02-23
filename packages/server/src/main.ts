@@ -58,8 +58,8 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
         {
           id: def.id,
           name: def.name,
-          handle: async (contextId, text, history) => {
-            const result = await agent.chat(contextId, text, history);
+          handle: async (contextId, text, history, opts) => {
+            const result = await agent.chat(contextId, text, history, opts);
             return { text: result.text };
           },
         },
@@ -88,8 +88,8 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
     orchestrator.registerAgent({
       id: 'default',
       name,
-      handle: async (contextId, text, history) => {
-        const result = await agent.chat(contextId, text, history);
+      handle: async (contextId, text, history, opts) => {
+        const result = await agent.chat(contextId, text, history, opts);
         return { text: result.text };
       },
     });
@@ -148,7 +148,7 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
           userId: inMsg.senderId,
           conversationId,
           text: inMsg.content,
-          metadata: inMsg.metadata,
+          metadata: { ...inMsg.metadata, chatId: inMsg.chatId },
         };
 
         try {
@@ -174,6 +174,19 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
     };
     // Fire-and-forget — runs until process exits
     consumeInbound();
+
+    // Wire agent cron-deliver events to MessageBus outbound
+    for (const agent of agents) {
+      agent.eventBus.on('cron-deliver', (data: { channel: string; chatId: string; content: string }) => {
+        bus!.publishOutbound({
+          channel: data.channel,
+          chatId: data.chatId,
+          content: data.content,
+          media: [],
+          metadata: {},
+        });
+      });
+    }
   }
 
   return {

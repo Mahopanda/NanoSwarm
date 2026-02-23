@@ -63,20 +63,10 @@ export class SubagentManager {
         this.eventBus.emit('subagent-finish', {
           taskId,
           label: resolvedLabel,
-          result: result.text,
+          result: result.finishReason === 'error' ? `Error: ${result.text}` : result.text,
         });
         this.running.delete(taskId);
         return result;
-      },
-      (error) => {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        this.eventBus.emit('subagent-finish', {
-          taskId,
-          label: resolvedLabel,
-          result: `Error: ${errorMsg}`,
-        });
-        this.running.delete(taskId);
-        return { text: `Error: ${errorMsg}`, toolCalls: [], steps: 0, usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }, finishReason: 'error' } as AgentLoopResult;
       },
     );
 
