@@ -9,3 +9,5 @@ export type { WebSearchOptions, WebFetchOptions } from './web.ts';
 export { createMessageTool } from './message.ts';
 export { createSpawnTool } from './spawn.ts';
 export { createCronTool } from './cron.ts';
+export { registerDefaultTools } from './factory.ts';
+export type { ToolFactoryConfig } from './factory.ts';

@@ -52,8 +52,12 @@ export class MemoryConsolidator {
     // Read existing memory
     const existingMemory = (await this.memoryStore.getMemory(contextId)) ?? '';
 
-    // Call LLM with save_memory tool
-    const result = await generateText({
+    // Capture stores for closure
+    const historyStore = this.historyStore;
+    const memoryStore = this.memoryStore;
+
+    // Call LLM with save_memory tool — persistence happens directly in execute
+    await generateText({
       model: this.model,
       system: CONSOLIDATION_PROMPT,
       messages: [
@@ -73,25 +77,14 @@ export class MemoryConsolidator {
               .string()
               .describe('The complete updated MEMORY.md content'),
           }),
-          execute: async () => 'saved',
+          execute: async ({ history_entry, memory_update }) => {
+            await historyStore.append(contextId, '(consolidation)', history_entry);
+            await memoryStore.saveMemory(contextId, memory_update);
+            return 'Memory consolidated successfully';
+          },
         }),
       },
       maxOutputTokens: 4096,
     });
-
-    // Extract tool call results
-    for (const step of result.steps) {
-      for (const tc of step.toolCalls) {
-        if (tc.toolName === 'save_memory') {
-          const input = tc.input as { history_entry: string; memory_update: string };
-
-          // Write history entry
-          await this.historyStore.append(contextId, '(consolidation)', input.history_entry);
-
-          // Write updated memory
-          await this.memoryStore.saveMemory(contextId, input.memory_update);
-        }
-      }
-    }
   }
 }
