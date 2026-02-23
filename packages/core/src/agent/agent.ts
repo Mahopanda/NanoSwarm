@@ -40,8 +40,12 @@ export class Agent {
 
   private stores: Stores | null;
 
-  private skillLoader: SkillLoader;
+  private _skillLoader: SkillLoader;
   private contextBuilder: ContextBuilder;
+
+  get skills() {
+    return this._skillLoader.allSkills;
+  }
   private loop: AgentLoop;
   private subagentManager: SubagentManager;
   private cronService: CronService | null;
@@ -61,12 +65,12 @@ export class Agent {
     this.historyStore = config.stores?.historyStore ?? new FileHistoryStore(config.workspace);
 
     // 3. SkillLoader
-    this.skillLoader = new SkillLoader();
+    this._skillLoader = new SkillLoader();
 
     // 4. ContextBuilder
     this.contextBuilder = new ContextBuilder(
       config.workspace,
-      this.skillLoader,
+      this._skillLoader,
       this.memoryStore,
     );
 
@@ -134,7 +138,7 @@ export class Agent {
   async start(): Promise<void> {
     // Load skills
     const skillsDir = this.config.skillsDir ?? join(this.config.workspace, '.nanoswarm', 'skills');
-    await this.skillLoader.loadAll(skillsDir);
+    await this._skillLoader.loadAll(skillsDir);
 
     // Start CronService
     if (this.cronService) {
