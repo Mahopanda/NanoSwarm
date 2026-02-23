@@ -1,7 +1,8 @@
 {
   "agents": {
     "defaults": {
-      "model": "gemini/gemini-2.0-flash"
+      "model": "gemini/gemini-3-flash-preview",
+      "workspace": "~/.nanoswarm/workspace"
     }
   },
   "providers": {
@@ -10,6 +11,8 @@
     }
   },
   "server": {
-    "port": 4000
+    "port": 4000,
+    "host": "0.0.0.0",
+    "name": "NanoSwarm"
   }
 }
