@@ -5,6 +5,30 @@
     "": {
       "name": "nanoswarm",
     },
+    "packages/a2a": {
+      "name": "@nanoswarm/a2a",
+      "version": "0.1.0",
+      "dependencies": {
+        "@a2a-js/sdk": "^0.3.10",
+        "@nanoswarm/core": "workspace:*",
+        "express": "^5.2.1",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/express": "^5.0.6",
+      },
+    },
+    "packages/channels": {
+      "name": "@nanoswarm/channels",
+      "version": "0.1.0",
+      "dependencies": {
+        "express": "^5.2.1",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/express": "^5.0.6",
+      },
+    },
     "packages/core": {
       "name": "@nanoswarm/core",
       "version": "0.1.0",
@@ -20,15 +44,27 @@
         "@types/bun": "latest",
       },
     },
+    "packages/orchestrator": {
+      "name": "@nanoswarm/orchestrator",
+      "version": "0.1.0",
+      "dependencies": {
+        "@nanoswarm/channels": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+    },
     "packages/server": {
       "name": "@nanoswarm/server",
       "version": "0.1.0",
       "dependencies": {
-        "@a2a-js/sdk": "^0.3.10",
         "@ai-sdk/anthropic": "^3.0.46",
         "@ai-sdk/google": "^3.0.30",
         "@ai-sdk/openai": "^3.0.30",
+        "@nanoswarm/a2a": "workspace:*",
+        "@nanoswarm/channels": "workspace:*",
         "@nanoswarm/core": "workspace:*",
+        "@nanoswarm/orchestrator": "workspace:*",
         "ai": "^6.0.97",
         "express": "^5.2.1",
       },
@@ -59,7 +95,13 @@
 
     "@mozilla/readability": ["@mozilla/readability@0.5.0", "", {}, "sha512-Z+CZ3QaosfFaTqvhQsIktyGrjFjSC0Fa4EMph4mqKnWhmyoGICsV/8QK+8HpXut6zV7zwfWwqDmEjtk1Qf6EgQ=="],
 
+    "@nanoswarm/a2a": ["@nanoswarm/a2a@workspace:packages/a2a"],
+
+    "@nanoswarm/channels": ["@nanoswarm/channels@workspace:packages/channels"],
+
     "@nanoswarm/core": ["@nanoswarm/core@workspace:packages/core"],
+
+    "@nanoswarm/orchestrator": ["@nanoswarm/orchestrator@workspace:packages/orchestrator"],
 
     "@nanoswarm/server": ["@nanoswarm/server@workspace:packages/server"],
 

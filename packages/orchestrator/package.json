@@ -1,0 +1,12 @@
+{
+  "name": "@nanoswarm/orchestrator",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@nanoswarm/channels": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

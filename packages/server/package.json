@@ -4,11 +4,13 @@
   "type": "module",
   "main": "src/index.ts",
   "dependencies": {
-    "@a2a-js/sdk": "^0.3.10",
     "@ai-sdk/anthropic": "^3.0.46",
     "@ai-sdk/google": "^3.0.30",
     "@ai-sdk/openai": "^3.0.30",
+    "@nanoswarm/a2a": "workspace:*",
+    "@nanoswarm/channels": "workspace:*",
     "@nanoswarm/core": "workspace:*",
+    "@nanoswarm/orchestrator": "workspace:*",
     "ai": "^6.0.97",
     "express": "^5.2.1"
   },

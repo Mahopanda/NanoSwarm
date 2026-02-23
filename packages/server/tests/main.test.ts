@@ -15,7 +15,7 @@ mock.module('ai', () => ({
 }));
 
 // Dynamic import after mocking
-const { createServer } = await import('../src/server.ts');
+const { createServer } = await import('../src/main.ts');
 
 const mockModel = { modelId: 'test-model' } as any;
 
@@ -102,6 +102,34 @@ describe('createServer', () => {
       expect(card.protocolVersion).toBe('0.3.0');
       expect(card.capabilities).toBeDefined();
       expect(card.url).toContain('/a2a/jsonrpc');
+    });
+
+    it('POST /api/chat should handle REST channel', async () => {
+      nanoServer = await createServer({
+        model: mockModel,
+        workspace: '/tmp/nanoswarm-server-test',
+        name: 'ChatTestAgent',
+        heartbeatEnabled: false,
+        cronEnabled: false,
+      } as ServerConfig);
+
+      const { server, port } = await listenOnRandomPort(nanoServer.app);
+      httpServer = server;
+
+      const response = await fetch(`http://127.0.0.1:${port}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: 'Hello!',
+          userId: 'test-user',
+        }),
+      });
+
+      expect(response.status).toBe(200);
+
+      const body = await response.json();
+      expect(body.text).toBeDefined();
+      expect(body.conversationId).toBeDefined();
     });
   });
 });

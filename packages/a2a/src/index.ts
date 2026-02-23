@@ -1,0 +1,21 @@
+// @nanoswarm/a2a — barrel export
+export { AgentRegistry, buildInternalCard, type AgentCardConfig } from './registry.ts';
+export { A2ARouter } from './router.ts';
+export { GatewayExecutor } from './gateway/executor.ts';
+export { createGateway, type GatewayOptions } from './gateway/gateway.ts';
+export { filterToExternalCard } from './gateway/external-card.ts';
+export type {
+  InternalAgentEntry,
+  ExternalCardConfig,
+  AgentHandler,
+  AgentCard,
+  AgentSkill,
+  Task,
+  Message,
+  TaskStatusUpdateEvent,
+  TaskArtifactUpdateEvent,
+  AgentExecutor,
+  RequestContext,
+  ExecutionEventBus,
+  TaskStore,
+} from './types.ts';

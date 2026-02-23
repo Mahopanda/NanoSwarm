@@ -1,6 +1,6 @@
 import { describe, it, expect, mock } from 'bun:test';
-import { NanoSwarmExecutor } from '../src/executor.ts';
-import type { Agent } from '@nanoswarm/core';
+import { GatewayExecutor } from '../../src/gateway/executor.ts';
+import { AgentRegistry } from '../../src/registry.ts';
 import type {
   Task,
   TaskStatusUpdateEvent,
@@ -8,11 +8,32 @@ import type {
   Message,
 } from '@a2a-js/sdk';
 import type { RequestContext, ExecutionEventBus } from '@a2a-js/sdk/server';
+import type { AgentCard } from '@a2a-js/sdk';
 
-function createMockAgent(chatResult = { text: 'Hello from agent', toolCalls: [], steps: 1, usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 }, finishReason: 'end-turn' }): Agent {
+function createMockCard(): AgentCard {
   return {
-    chat: mock(async () => chatResult),
-  } as unknown as Agent;
+    name: 'Test',
+    description: 'Test',
+    version: '0.1.0',
+    protocolVersion: '0.3.0',
+    url: 'http://localhost:4000/a2a/jsonrpc',
+    capabilities: { streaming: true, pushNotifications: false, stateTransitionHistory: true },
+    skills: [],
+    defaultInputModes: ['text/plain'],
+    defaultOutputModes: ['text/plain'],
+  };
+}
+
+function createRegistryWithHandler(chatResult = { text: 'Hello from agent' }): AgentRegistry {
+  const registry = new AgentRegistry();
+  registry.register({
+    id: 'default',
+    card: createMockCard(),
+    handler: {
+      chat: mock(async () => chatResult),
+    },
+  });
+  return registry;
 }
 
 function createMockEventBus() {
@@ -54,29 +75,26 @@ function createMockRequestContext(opts: {
   } as unknown as RequestContext;
 }
 
-describe('NanoSwarmExecutor', () => {
+describe('GatewayExecutor', () => {
   describe('execute', () => {
     it('should publish Task → working → artifact → completed for new task', async () => {
-      const agent = createMockAgent();
+      const registry = createRegistryWithHandler();
       const eventBus = createMockEventBus();
-      const executor = new NanoSwarmExecutor(agent);
+      const executor = new GatewayExecutor(registry);
       const ctx = createMockRequestContext();
 
       await executor.execute(ctx, eventBus);
 
       expect(eventBus.events).toHaveLength(4);
 
-      // 1. Initial task
       expect(eventBus.events[0].kind).toBe('task');
       expect(eventBus.events[0].id).toBe('task-1');
       expect(eventBus.events[0].status.state).toBe('submitted');
 
-      // 2. Working status
       expect(eventBus.events[1].kind).toBe('status-update');
       expect((eventBus.events[1] as TaskStatusUpdateEvent).status.state).toBe('working');
       expect((eventBus.events[1] as TaskStatusUpdateEvent).final).toBe(false);
 
-      // 3. Artifact
       expect(eventBus.events[2].kind).toBe('artifact-update');
       expect((eventBus.events[2] as TaskArtifactUpdateEvent).artifact.parts[0]).toEqual({
         kind: 'text',
@@ -84,16 +102,15 @@ describe('NanoSwarmExecutor', () => {
       });
       expect((eventBus.events[2] as TaskArtifactUpdateEvent).lastChunk).toBe(true);
 
-      // 4. Completed
       expect(eventBus.events[3].kind).toBe('status-update');
       expect((eventBus.events[3] as TaskStatusUpdateEvent).status.state).toBe('completed');
       expect((eventBus.events[3] as TaskStatusUpdateEvent).final).toBe(true);
     });
 
     it('should skip initial Task event for existing task', async () => {
-      const agent = createMockAgent();
+      const registry = createRegistryWithHandler();
       const eventBus = createMockEventBus();
-      const executor = new NanoSwarmExecutor(agent);
+      const executor = new GatewayExecutor(registry);
 
       const existingTask: Task = {
         kind: 'task',
@@ -105,26 +122,26 @@ describe('NanoSwarmExecutor', () => {
       const ctx = createMockRequestContext({ existingTask });
       await executor.execute(ctx, eventBus);
 
-      // Should be 3 events (no initial Task event)
       expect(eventBus.events).toHaveLength(3);
       expect(eventBus.events[0].kind).toBe('status-update');
     });
 
     it('should extract text from message parts', async () => {
-      const agent = createMockAgent();
+      const registry = createRegistryWithHandler();
       const eventBus = createMockEventBus();
-      const executor = new NanoSwarmExecutor(agent);
+      const executor = new GatewayExecutor(registry);
       const ctx = createMockRequestContext({ text: 'Test message' });
 
       await executor.execute(ctx, eventBus);
 
-      expect(agent.chat).toHaveBeenCalledWith('ctx-1', 'Test message', undefined);
+      const handler = registry.getDefault()!.handler;
+      expect(handler.chat).toHaveBeenCalledWith('ctx-1', 'Test message', undefined);
     });
 
     it('should convert history from existing task', async () => {
-      const agent = createMockAgent();
+      const registry = createRegistryWithHandler();
       const eventBus = createMockEventBus();
-      const executor = new NanoSwarmExecutor(agent);
+      const executor = new GatewayExecutor(registry);
 
       const existingTask: Task = {
         kind: 'task',
@@ -150,24 +167,29 @@ describe('NanoSwarmExecutor', () => {
       const ctx = createMockRequestContext({ existingTask });
       await executor.execute(ctx, eventBus);
 
-      expect(agent.chat).toHaveBeenCalledWith('ctx-1', 'Hello', [
+      const handler = registry.getDefault()!.handler;
+      expect(handler.chat).toHaveBeenCalledWith('ctx-1', 'Hello', [
         { role: 'user', content: 'Previous question' },
         { role: 'assistant', content: 'Previous answer' },
       ]);
     });
 
     it('should publish failed status on error', async () => {
-      const agent = {
-        chat: mock(async () => { throw new Error('LLM failed'); }),
-      } as unknown as Agent;
+      const registry = new AgentRegistry();
+      registry.register({
+        id: 'default',
+        card: createMockCard(),
+        handler: {
+          chat: mock(async () => { throw new Error('LLM failed'); }),
+        },
+      });
 
       const eventBus = createMockEventBus();
-      const executor = new NanoSwarmExecutor(agent);
+      const executor = new GatewayExecutor(registry);
       const ctx = createMockRequestContext();
 
       await executor.execute(ctx, eventBus);
 
-      // Task → working → failed
       const lastEvent = eventBus.events[eventBus.events.length - 1] as TaskStatusUpdateEvent;
       expect(lastEvent.kind).toBe('status-update');
       expect(lastEvent.status.state).toBe('failed');
@@ -178,10 +200,26 @@ describe('NanoSwarmExecutor', () => {
       });
     });
 
-    it('should handle empty message parts gracefully', async () => {
-      const agent = createMockAgent();
+    it('should fail when no default agent in registry', async () => {
+      const registry = new AgentRegistry();
       const eventBus = createMockEventBus();
-      const executor = new NanoSwarmExecutor(agent);
+      const executor = new GatewayExecutor(registry);
+      const ctx = createMockRequestContext();
+
+      await executor.execute(ctx, eventBus);
+
+      const lastEvent = eventBus.events[eventBus.events.length - 1] as TaskStatusUpdateEvent;
+      expect(lastEvent.status.state).toBe('failed');
+      expect(lastEvent.status.message?.parts[0]).toEqual({
+        kind: 'text',
+        text: 'No default agent registered in registry',
+      });
+    });
+
+    it('should handle empty message parts gracefully', async () => {
+      const registry = createRegistryWithHandler();
+      const eventBus = createMockEventBus();
+      const executor = new GatewayExecutor(registry);
 
       const ctx = {
         userMessage: {
@@ -197,15 +235,16 @@ describe('NanoSwarmExecutor', () => {
 
       await executor.execute(ctx, eventBus);
 
-      expect(agent.chat).toHaveBeenCalledWith('ctx-1', '', undefined);
+      const handler = registry.getDefault()!.handler;
+      expect(handler.chat).toHaveBeenCalledWith('ctx-1', '', undefined);
     });
   });
 
   describe('cancelTask', () => {
     it('should publish canceled status', async () => {
-      const agent = createMockAgent();
+      const registry = createRegistryWithHandler();
       const eventBus = createMockEventBus();
-      const executor = new NanoSwarmExecutor(agent);
+      const executor = new GatewayExecutor(registry);
 
       await executor.cancelTask('task-1', eventBus);
 

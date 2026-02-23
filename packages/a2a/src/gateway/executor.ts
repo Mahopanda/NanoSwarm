@@ -9,15 +9,14 @@ import type {
   RequestContext,
   ExecutionEventBus,
 } from '@a2a-js/sdk/server';
-import type { Agent } from '@nanoswarm/core';
+import type { AgentRegistry } from '../registry.ts';
 
-export class NanoSwarmExecutor implements AgentExecutor {
-  constructor(private agent: Agent) {}
+export class GatewayExecutor implements AgentExecutor {
+  constructor(private registry: AgentRegistry) {}
 
   async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     const { userMessage, taskId, contextId, task: existingTask } = requestContext;
 
-    // Extract text from message parts
     const text = this.extractText(userMessage);
 
     try {
@@ -60,10 +59,16 @@ export class NanoSwarmExecutor implements AgentExecutor {
       // 3. Convert A2A history to agent format
       const history = this.convertHistory(existingTask);
 
-      // 4. Call agent
-      const result = await this.agent.chat(contextId, text, history);
+      // 4. Resolve handler from registry
+      const entry = this.registry.getDefault();
+      if (!entry) {
+        throw new Error('No default agent registered in registry');
+      }
 
-      // 5. Publish artifact
+      // 5. Call agent handler
+      const result = await entry.handler.chat(contextId, text, history);
+
+      // 6. Publish artifact
       const artifactUpdate: TaskArtifactUpdateEvent = {
         kind: 'artifact-update',
         taskId,
@@ -77,7 +82,7 @@ export class NanoSwarmExecutor implements AgentExecutor {
       };
       eventBus.publish(artifactUpdate);
 
-      // 6. Publish completed status
+      // 7. Publish completed status
       const completedUpdate: TaskStatusUpdateEvent = {
         kind: 'status-update',
         taskId,
@@ -90,7 +95,6 @@ export class NanoSwarmExecutor implements AgentExecutor {
       };
       eventBus.publish(completedUpdate);
     } catch (error) {
-      // Publish failed status
       const failedUpdate: TaskStatusUpdateEvent = {
         kind: 'status-update',
         taskId,
