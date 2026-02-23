@@ -6,7 +6,8 @@
       "Bash(head:*)",
       "Bash(wc:*)",
       "Bash(git checkout:*)",
-      "Bash(git switch:*)"
+      "Bash(git switch:*)",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }
