@@ -3,23 +3,21 @@ import { MemoryConsolidator } from '../../src/memory/consolidator.ts';
 import type { MemoryStore } from '../../src/memory/memory-store.ts';
 import type { HistoryStore } from '../../src/memory/history-store.ts';
 
-// Mock generateText
-const mockGenerateText = mock(async () => ({
-  text: '',
-  steps: [
-    {
-      toolCalls: [
-        {
-          toolName: 'save_memory',
-          input: {
-            history_entry: 'User discussed project setup. Agent helped configure dependencies.',
-            memory_update: '# Updated Memory\n\n- Project uses TypeScript\n- Dependencies configured',
-          },
-        },
-      ],
-    },
-  ],
-}));
+// Mock generateText — captures the tools and invokes execute directly
+const mockGenerateText = mock(async (opts: any) => {
+  // Simulate LLM calling save_memory tool by invoking execute
+  const saveTool = opts.tools?.save_memory;
+  if (saveTool?.execute) {
+    await saveTool.execute({
+      history_entry: 'User discussed project setup. Agent helped configure dependencies.',
+      memory_update: '# Updated Memory\n\n- Project uses TypeScript\n- Dependencies configured',
+    });
+  }
+  return {
+    text: '',
+    steps: [],
+  };
+});
 
 mock.module('ai', () => ({
   generateText: mockGenerateText,
@@ -70,7 +68,7 @@ describe('MemoryConsolidator', () => {
     expect(call.messages[0].content).toContain('Hello');
   });
 
-  it('should write history entry from tool call result', async () => {
+  it('should persist history entry via tool execute', async () => {
     await consolidator.consolidate('ctx1', [
       { role: 'user', content: 'Setup project' },
       { role: 'assistant', content: 'Done' },
@@ -82,7 +80,7 @@ describe('MemoryConsolidator', () => {
     expect(mockAppend.mock.calls[0][2]).toContain('project setup');
   });
 
-  it('should write updated memory from tool call result', async () => {
+  it('should persist updated memory via tool execute', async () => {
     await consolidator.consolidate('ctx1', [
       { role: 'user', content: 'Setup project' },
       { role: 'assistant', content: 'Done' },
