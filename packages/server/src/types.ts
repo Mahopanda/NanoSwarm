@@ -1,5 +1,11 @@
 import type { LanguageModel } from 'ai';
 import type { Stores, AgentConfig } from '@nanoswarm/core';
+import type { CLIChannelConfig, TelegramChannelConfig } from '@nanoswarm/channels';
+
+export interface ChannelsConfig {
+  cli?: CLIChannelConfig;
+  telegram?: TelegramChannelConfig;
+}
 
 export interface AgentDefinition {
   id: string;
@@ -22,4 +28,5 @@ export interface ServerConfig {
   stores?: Stores;
   agentConfig?: Partial<Omit<AgentConfig, 'model' | 'workspace' | 'stores'>>;
   agents?: AgentDefinition[];
+  channels?: ChannelsConfig;
 }

@@ -1,7 +1,16 @@
 import express, { type Express } from 'express';
 import { Agent, type AgentConfig } from '@nanoswarm/core';
 import { AgentRegistry, buildInternalCard, createGateway } from '@nanoswarm/a2a';
-import { createRestRouter } from '@nanoswarm/channels';
+import {
+  createRestRouter,
+  MessageBus,
+  ChannelManager,
+  CLIChannel,
+  TelegramChannel,
+  sessionKey,
+  type InboundMessage,
+  type NormalizedMessage,
+} from '@nanoswarm/channels';
 import { Orchestrator } from '@nanoswarm/orchestrator';
 import type { ServerConfig } from './types.ts';
 
@@ -9,6 +18,8 @@ export interface NanoSwarmServer {
   app: Express;
   agent: Agent;
   agents: Agent[];
+  bus?: MessageBus;
+  channelManager?: ChannelManager;
   start: (port?: number) => Promise<void>;
   stop: () => Promise<void>;
 }
@@ -110,13 +121,70 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
     : undefined;
   app.use(createGateway({ registry, taskStore }));
 
+  // Channel layer (optional — only when config.channels is present)
+  let bus: MessageBus | undefined;
+  let channelManager: ChannelManager | undefined;
+
+  if (config.channels) {
+    bus = new MessageBus();
+    channelManager = new ChannelManager(bus);
+
+    // Register enabled channels
+    if (config.channels.cli?.enabled) {
+      channelManager.register(new CLIChannel(config.channels.cli, bus));
+    }
+    if (config.channels.telegram?.enabled) {
+      channelManager.register(new TelegramChannel(config.channels.telegram, bus));
+    }
+
+    // Inbound consumer loop: bus → orchestrator → bus.outbound
+    const consumeInbound = async () => {
+      while (true) {
+        const inMsg: InboundMessage = await bus!.consumeInbound();
+        const conversationId = sessionKey(inMsg);
+
+        const normalized: NormalizedMessage = {
+          channelId: inMsg.channel,
+          userId: inMsg.senderId,
+          conversationId,
+          text: inMsg.content,
+          metadata: inMsg.metadata,
+        };
+
+        try {
+          const response = await orchestrator.handle(normalized);
+          bus!.publishOutbound({
+            channel: inMsg.channel,
+            chatId: inMsg.chatId,
+            content: response.text,
+            media: [],
+            metadata: response.metadata ?? {},
+          });
+        } catch (err) {
+          console.error(`[${name}] Channel message error:`, err);
+          bus!.publishOutbound({
+            channel: inMsg.channel,
+            chatId: inMsg.chatId,
+            content: 'An error occurred while processing your message.',
+            media: [],
+            metadata: {},
+          });
+        }
+      }
+    };
+    // Fire-and-forget — runs until process exits
+    consumeInbound();
+  }
+
   return {
     app,
     agent: agents[0],
     agents,
-    start: (overridePort?: number) =>
-      new Promise<void>((resolve) => {
-        const p = overridePort ?? port;
+    bus,
+    channelManager,
+    start: async (overridePort?: number) => {
+      const p = overridePort ?? port;
+      await new Promise<void>((resolve) => {
         app.listen(p, host, () => {
           console.log(`[${name}] Server started on http://${host}:${p}`);
           console.log(`[${name}] REST API: http://${host}:${p}/api/chat`);
@@ -125,8 +193,16 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
           console.log(`[${name}] Health: http://${host}:${p}/health`);
           resolve();
         });
-      }),
+      });
+      if (channelManager) {
+        await channelManager.startAll();
+        console.log(`[${name}] Channels started:`, Object.keys(channelManager.getStatus()).join(', '));
+      }
+    },
     stop: async () => {
+      if (channelManager) {
+        await channelManager.stopAll();
+      }
       await Promise.all(agents.map(a => a.stop()));
     },
   };
