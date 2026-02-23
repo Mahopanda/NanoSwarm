@@ -31,5 +31,9 @@ Thumbs.db
 
 docs/
 
+# NanoSwarm config (contains API keys)
+**/config.json
+!**/config.example.json
+
 # Bun
 bun.lockb

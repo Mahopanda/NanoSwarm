@@ -33,7 +33,7 @@ export class ContextBuilder {
 
     // 2. Bootstrap files
     for (const fileName of BOOTSTRAP_FILES) {
-      const content = await tryReadFile(join(this.workspacePath, '.nanoswarm', fileName));
+      const content = await tryReadFile(join(this.workspacePath, fileName));
       if (content) {
         sections.push(`## ${fileName}\n\n${content}`);
       }

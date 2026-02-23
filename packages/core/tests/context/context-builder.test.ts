@@ -30,9 +30,8 @@ describe('ContextBuilder', () => {
   });
 
   it('should include bootstrap files when present', async () => {
-    const nsDir = join(workspace, '.nanoswarm');
-    await writeFile(join(nsDir, 'SOUL.md'), 'You are a helpful assistant.', 'utf-8');
-    await writeFile(join(nsDir, 'TOOLS.md'), 'Available tools: read_file', 'utf-8');
+    await writeFile(join(workspace, 'SOUL.md'), 'You are a helpful assistant.', 'utf-8');
+    await writeFile(join(workspace, 'TOOLS.md'), 'Available tools: read_file', 'utf-8');
 
     const prompt = await builder.buildSystemPrompt('ctx1');
     expect(prompt).toContain('## SOUL.md');
@@ -87,8 +86,7 @@ describe('ContextBuilder', () => {
   });
 
   it('should build correct section order', async () => {
-    const nsDir = join(workspace, '.nanoswarm');
-    await writeFile(join(nsDir, 'SOUL.md'), 'Soul content', 'utf-8');
+    await writeFile(join(workspace, 'SOUL.md'), 'Soul content', 'utf-8');
     await memoryStore.saveMemory('ctx1', 'Memory content');
 
     const prompt = await builder.buildSystemPrompt('ctx1');
