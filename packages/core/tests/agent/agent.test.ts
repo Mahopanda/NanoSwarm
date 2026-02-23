@@ -148,4 +148,40 @@ describe('Agent', () => {
       defaultAgent.stop();
     });
   });
+
+  describe('stores injection', () => {
+    it('should use injected stores when provided', () => {
+      const mockStores = {
+        memoryStore: { getMemory: async () => null, saveMemory: async () => {} },
+        historyStore: {
+          append: async () => {},
+          getHistory: async () => [],
+          search: async () => [],
+        },
+        taskStore: { save: async () => {}, load: async () => undefined },
+        registryStore: {
+          register: async () => {},
+          get: async () => undefined,
+          findBySkill: async () => [],
+          listActive: async () => [],
+          unregister: async () => false,
+        },
+        close: () => {},
+      };
+
+      const agentWithStores = new Agent({
+        ...config,
+        stores: mockStores,
+      });
+
+      expect(agentWithStores.memoryStore).toBe(mockStores.memoryStore);
+      expect(agentWithStores.historyStore).toBe(mockStores.historyStore);
+      agentWithStores.stop();
+    });
+
+    it('should fallback to file stores when no stores provided', () => {
+      expect(agent.memoryStore).toBeDefined();
+      expect(agent.historyStore).toBeDefined();
+    });
+  });
 });

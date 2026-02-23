@@ -1,16 +1,20 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { mkdtemp } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { FileHistoryStore } from '../../src/memory/history-store.ts';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { Database } from 'bun:sqlite';
+import { initSchema } from '../../src/store/schema.ts';
+import { SQLiteHistoryStore } from '../../src/store/sqlite-history-store.ts';
 
-describe('FileHistoryStore', () => {
-  let tempDir: string;
-  let store: FileHistoryStore;
+describe('SQLiteHistoryStore', () => {
+  let db: Database;
+  let store: SQLiteHistoryStore;
 
-  beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'nanoswarm-hist-'));
-    store = new FileHistoryStore(tempDir);
+  beforeEach(() => {
+    db = new Database(':memory:');
+    initSchema(db);
+    store = new SQLiteHistoryStore(db);
+  });
+
+  afterEach(() => {
+    db.close();
   });
 
   it('should return empty array for non-existent history', async () => {
@@ -61,7 +65,7 @@ describe('FileHistoryStore', () => {
   });
 
   describe('search', () => {
-    it('should find matching entries by substring', async () => {
+    it('should find matching entries via FTS5', async () => {
       await store.append('ctx1', 'Tell me about TypeScript', 'TypeScript is great');
       await store.append('ctx1', 'Tell me about Python', 'Python is versatile');
 
@@ -76,10 +80,13 @@ describe('FileHistoryStore', () => {
       expect(results).toEqual([]);
     });
 
-    it('should be case-insensitive', async () => {
-      await store.append('ctx1', 'typescript rocks', 'Indeed');
-      const results = await store.search('ctx1', 'TypeScript');
+    it('should scope search to contextId', async () => {
+      await store.append('ctx-a', 'TypeScript rocks', 'Indeed');
+      await store.append('ctx-b', 'TypeScript is cool', 'Agreed');
+
+      const results = await store.search('ctx-a', 'TypeScript');
       expect(results).toHaveLength(1);
+      expect(results[0].agentResponse).toBe('Indeed');
     });
   });
 });

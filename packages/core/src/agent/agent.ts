@@ -2,7 +2,10 @@ import { join } from 'node:path';
 import type { LanguageModel } from 'ai';
 import { EventBus } from '../events/event-bus.ts';
 import { FileMemoryStore } from '../memory/memory-store.ts';
+import type { MemoryStore } from '../memory/memory-store.ts';
 import { FileHistoryStore } from '../memory/history-store.ts';
+import type { HistoryStore } from '../memory/history-store.ts';
+import type { Stores } from '../store/types.ts';
 import { MemoryConsolidator } from '../memory/consolidator.ts';
 import { SkillLoader } from '../skills/loader.ts';
 import { ContextBuilder } from '../context/context-builder.ts';
@@ -18,6 +21,7 @@ import type { ExecToolOptions } from '../tools/shell.ts';
 export interface AgentConfig {
   model: LanguageModel;
   workspace: string;
+  stores?: Stores;
   skillsDir?: string;
   cronStoreDir?: string;
   heartbeatEnabled?: boolean;
@@ -31,8 +35,10 @@ export interface AgentConfig {
 export class Agent {
   readonly eventBus: EventBus;
   readonly registry: ToolRegistry;
-  readonly memoryStore: FileMemoryStore;
-  readonly historyStore: FileHistoryStore;
+  readonly memoryStore: MemoryStore;
+  readonly historyStore: HistoryStore;
+
+  private stores: Stores | null;
 
   private skillLoader: SkillLoader;
   private contextBuilder: ContextBuilder;
@@ -49,9 +55,10 @@ export class Agent {
     // 1. EventBus
     this.eventBus = new EventBus();
 
-    // 2. Memory & History stores
-    this.memoryStore = new FileMemoryStore(config.workspace);
-    this.historyStore = new FileHistoryStore(config.workspace);
+    // 2. Memory & History stores (use injected stores or fallback to file-based)
+    this.stores = config.stores ?? null;
+    this.memoryStore = config.stores?.memoryStore ?? new FileMemoryStore(config.workspace);
+    this.historyStore = config.stores?.historyStore ?? new FileHistoryStore(config.workspace);
 
     // 3. SkillLoader
     this.skillLoader = new SkillLoader();
@@ -147,6 +154,7 @@ export class Agent {
     if (this.heartbeatService) {
       this.heartbeatService.stop();
     }
+    this.stores?.close();
   }
 
   async chat(

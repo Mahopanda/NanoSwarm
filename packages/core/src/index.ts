@@ -8,3 +8,4 @@ export * from './context/index.ts';
 export * from './agent/index.ts';
 export * from './cron/index.ts';
 export * from './heartbeat/index.ts';
+export * from './store/index.ts';

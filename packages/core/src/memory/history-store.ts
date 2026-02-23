@@ -5,6 +5,7 @@ import type { HistoryEntry } from './types.ts';
 export interface HistoryStore {
   append(contextId: string, userMessage: string, agentResponse: string): Promise<void>;
   getHistory(contextId: string, limit?: number): Promise<HistoryEntry[]>;
+  search(contextId: string, query: string): Promise<HistoryEntry[]>;
 }
 
 function formatTimestamp(date: Date): string {
@@ -63,5 +64,15 @@ export class FileHistoryStore implements HistoryStore {
       return entries.slice(-limit);
     }
     return entries;
+  }
+
+  async search(contextId: string, query: string): Promise<HistoryEntry[]> {
+    const entries = await this.getHistory(contextId);
+    const q = query.toLowerCase();
+    return entries.filter(
+      (e) =>
+        e.userMessage.toLowerCase().includes(q) ||
+        e.agentResponse.toLowerCase().includes(q),
+    );
   }
 }
