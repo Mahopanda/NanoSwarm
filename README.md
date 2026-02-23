@@ -27,3 +27,12 @@ workspace/    # Bootstrap Files (SOUL.md, AGENTS.md, USER.md, TOOLS.md)
 skills/       # Skill definitions
 data/         # SQLite data directory
 ```
+
+This project is an independent research and experimental effort 
+developed entirely on personal time using personal equipment. 
+It is not affiliated with, sponsored by, or endorsed by any employer or organization.
+
+All original design decisions, code, and documentation are the author’s own work.
+
+Some ideas and technical approaches were inspired by existing open-source projects. 
+Any such projects are referenced or acknowledged where appropriate.
