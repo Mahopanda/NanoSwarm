@@ -212,7 +212,7 @@ describe('GatewayExecutor', () => {
       expect(lastEvent.status.state).toBe('failed');
       expect(lastEvent.status.message?.parts[0]).toEqual({
         kind: 'text',
-        text: 'No default agent registered in registry',
+        text: 'No default agent registered',
       });
     });
 
@@ -237,6 +237,98 @@ describe('GatewayExecutor', () => {
 
       const handler = registry.getDefault()!.handler;
       expect(handler.chat).toHaveBeenCalledWith('ctx-1', '', undefined);
+    });
+  });
+
+  describe('agent routing', () => {
+    it('should route to specific agent when message has agentId metadata', async () => {
+      const registry = new AgentRegistry();
+      const coderChat = mock(async () => ({ text: 'Coder response' }));
+      const writerChat = mock(async () => ({ text: 'Writer response' }));
+      registry.register({
+        id: 'coder',
+        card: createMockCard(),
+        handler: { chat: coderChat },
+      });
+      registry.register({
+        id: 'writer',
+        card: createMockCard(),
+        handler: { chat: writerChat },
+      });
+
+      const eventBus = createMockEventBus();
+      const executor = new GatewayExecutor(registry);
+      const message: Message = {
+        kind: 'message',
+        messageId: 'msg-1',
+        role: 'user',
+        parts: [{ kind: 'text', text: 'Hello' }],
+        contextId: 'ctx-1',
+        taskId: 'task-1',
+        metadata: { agentId: 'writer' },
+      } as any;
+      const ctx = {
+        userMessage: message,
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        task: undefined,
+      } as unknown as RequestContext;
+
+      await executor.execute(ctx, eventBus);
+
+      expect(writerChat).toHaveBeenCalled();
+      expect(coderChat).not.toHaveBeenCalled();
+      const artifact = eventBus.events.find((e: any) => e.kind === 'artifact-update');
+      expect(artifact.artifact.parts[0].text).toBe('Writer response');
+    });
+
+    it('should fall back to default when no agentId in metadata', async () => {
+      const registry = new AgentRegistry();
+      const defaultChat = mock(async () => ({ text: 'Default response' }));
+      registry.register({
+        id: 'default',
+        card: createMockCard(),
+        handler: { chat: defaultChat },
+      });
+
+      const eventBus = createMockEventBus();
+      const executor = new GatewayExecutor(registry);
+      const ctx = createMockRequestContext();
+
+      await executor.execute(ctx, eventBus);
+
+      expect(defaultChat).toHaveBeenCalled();
+    });
+
+    it('should publish failed status when agentId does not exist', async () => {
+      const registry = createRegistryWithHandler();
+      const eventBus = createMockEventBus();
+      const executor = new GatewayExecutor(registry);
+
+      const message: Message = {
+        kind: 'message',
+        messageId: 'msg-1',
+        role: 'user',
+        parts: [{ kind: 'text', text: 'Hello' }],
+        contextId: 'ctx-1',
+        taskId: 'task-1',
+        metadata: { agentId: 'ghost' },
+      } as any;
+      const ctx = {
+        userMessage: message,
+        taskId: 'task-1',
+        contextId: 'ctx-1',
+        task: undefined,
+      } as unknown as RequestContext;
+
+      await executor.execute(ctx, eventBus);
+
+      const lastEvent = eventBus.events[eventBus.events.length - 1] as TaskStatusUpdateEvent;
+      expect(lastEvent.status.state).toBe('failed');
+      expect(lastEvent.status.message?.parts[0]).toEqual({
+        kind: 'text',
+        text: 'Agent not found: ghost',
+      });
     });
   });
 

@@ -26,11 +26,12 @@ export class Orchestrator implements MessageHandler {
     return this.taskManager;
   }
 
+  listAgents(): Array<{ id: string; name: string }> {
+    return [...this.agents.values()].map(a => ({ id: a.id, name: a.name }));
+  }
+
   async handle(message: NormalizedMessage): Promise<NormalizedResponse> {
-    const agent = this.getDefaultAgent();
-    if (!agent) {
-      throw new Error('No agent registered');
-    }
+    const agent = this.resolveAgent(message);
 
     const task = this.taskManager.create(message.conversationId, agent.id);
     this.taskManager.updateState(task.id, 'working');
@@ -40,11 +41,23 @@ export class Orchestrator implements MessageHandler {
       this.taskManager.updateState(task.id, 'completed');
       return {
         text: result.text,
-        metadata: result.metadata,
+        metadata: { ...result.metadata, agentId: agent.id },
       };
     } catch (error) {
       this.taskManager.updateState(task.id, 'failed');
       throw error;
     }
+  }
+
+  private resolveAgent(message: NormalizedMessage): AgentHandle {
+    const requestedId = message.metadata?.agentId as string | undefined;
+    if (requestedId) {
+      const agent = this.agents.get(requestedId);
+      if (!agent) throw new Error(`Agent not found: ${requestedId}`);
+      return agent;
+    }
+    const defaultAgent = this.getDefaultAgent();
+    if (!defaultAgent) throw new Error('No agent registered');
+    return defaultAgent;
   }
 }

@@ -132,7 +132,84 @@ describe('Orchestrator', () => {
       orchestrator.registerAgent(agent);
 
       const response = await orchestrator.handle(createMessage());
-      expect(response.metadata).toEqual({ model: 'test' });
+      expect(response.metadata).toEqual({ model: 'test', agentId: 'meta' });
+    });
+
+    it('should route to specific agent when metadata.agentId matches', async () => {
+      const orchestrator = new Orchestrator();
+      const agent1 = createMockAgent('coder', 'Coder');
+      const agent2 = createMockAgent('writer', 'Writer');
+      orchestrator.registerAgent(agent1);
+      orchestrator.registerAgent(agent2);
+
+      const response = await orchestrator.handle(
+        createMessage('Hello', { metadata: { agentId: 'writer' } }),
+      );
+
+      expect(response.text).toBe('Response to: Hello');
+      expect(agent2.handle).toHaveBeenCalledWith('conv-1', 'Hello');
+      expect(agent1.handle).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to default when no agentId in metadata', async () => {
+      const orchestrator = new Orchestrator();
+      const agent1 = createMockAgent('coder', 'Coder');
+      const agent2 = createMockAgent('writer', 'Writer');
+      orchestrator.registerAgent(agent1);
+      orchestrator.registerAgent(agent2);
+
+      const response = await orchestrator.handle(createMessage('Hello'));
+
+      expect(response.text).toBe('Response to: Hello');
+      expect(agent1.handle).toHaveBeenCalled();
+    });
+
+    it('should throw Agent not found when agentId does not exist', async () => {
+      const orchestrator = new Orchestrator();
+      orchestrator.registerAgent(createMockAgent('coder', 'Coder'));
+
+      await expect(
+        orchestrator.handle(createMessage('Hello', { metadata: { agentId: 'ghost' } })),
+      ).rejects.toThrow('Agent not found: ghost');
+    });
+
+    it('should include agentId in response metadata', async () => {
+      const orchestrator = new Orchestrator();
+      orchestrator.registerAgent(createMockAgent('coder', 'Coder'));
+
+      const response = await orchestrator.handle(
+        createMessage('Hello', { metadata: { agentId: 'coder' } }),
+      );
+
+      expect(response.metadata?.agentId).toBe('coder');
+    });
+
+    it('should record correct agentId in task when routed', async () => {
+      const orchestrator = new Orchestrator();
+      orchestrator.registerAgent(createMockAgent('coder', 'Coder'));
+      orchestrator.registerAgent(createMockAgent('writer', 'Writer'));
+
+      await orchestrator.handle(
+        createMessage('Hello', { metadata: { agentId: 'writer' } }),
+      );
+
+      const tasks = orchestrator.getTaskManager().listByContext('conv-1');
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].agentId).toBe('writer');
+    });
+  });
+
+  describe('listAgents', () => {
+    it('should return all registered agents', () => {
+      const orchestrator = new Orchestrator();
+      orchestrator.registerAgent(createMockAgent('coder', 'Coder'));
+      orchestrator.registerAgent(createMockAgent('writer', 'Writer'));
+
+      const list = orchestrator.listAgents();
+      expect(list).toEqual([
+        { id: 'coder', name: 'Coder' },
+        { id: 'writer', name: 'Writer' },
+      ]);
     });
   });
 });

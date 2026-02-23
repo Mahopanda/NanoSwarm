@@ -10,9 +10,14 @@ import type {
   ExecutionEventBus,
 } from '@a2a-js/sdk/server';
 import type { AgentRegistry } from '../registry.ts';
+import { A2ARouter } from '../router.ts';
 
 export class GatewayExecutor implements AgentExecutor {
-  constructor(private registry: AgentRegistry) {}
+  private router: A2ARouter;
+
+  constructor(private registry: AgentRegistry) {
+    this.router = new A2ARouter(registry);
+  }
 
   async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     const { userMessage, taskId, contextId, task: existingTask } = requestContext;
@@ -59,14 +64,12 @@ export class GatewayExecutor implements AgentExecutor {
       // 3. Convert A2A history to agent format
       const history = this.convertHistory(existingTask);
 
-      // 4. Resolve handler from registry
-      const entry = this.registry.getDefault();
-      if (!entry) {
-        throw new Error('No default agent registered in registry');
-      }
+      // 4. Resolve handler via router (supports agentId routing)
+      const agentId = this.extractAgentId(userMessage);
+      const handler = this.router.resolve(agentId);
 
       // 5. Call agent handler
-      const result = await entry.handler.chat(contextId, text, history);
+      const result = await handler.chat(contextId, text, history);
 
       // 6. Publish artifact
       const artifactUpdate: TaskArtifactUpdateEvent = {
@@ -132,6 +135,10 @@ export class GatewayExecutor implements AgentExecutor {
       final: true,
     };
     eventBus.publish(canceledUpdate);
+  }
+
+  private extractAgentId(message: Message): string | undefined {
+    return (message as any).metadata?.agentId as string | undefined;
   }
 
   private extractText(message: Message): string {

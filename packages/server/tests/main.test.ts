@@ -58,6 +58,34 @@ describe('createServer', () => {
     expect(nanoServer.stop).toBeInstanceOf(Function);
   });
 
+  it('should create multiple agents when config.agents is provided', async () => {
+    nanoServer = await createServer({
+      model: mockModel,
+      workspace: '/tmp/nanoswarm-server-test',
+      heartbeatEnabled: false,
+      cronEnabled: false,
+      agents: [
+        { id: 'coder', name: 'Coder', default: true },
+        { id: 'writer', name: 'Writer' },
+      ],
+    } as ServerConfig);
+
+    expect(nanoServer.agents).toHaveLength(2);
+    expect(nanoServer.agent).toBeDefined();
+
+    const { server, port } = await listenOnRandomPort(nanoServer.app);
+    httpServer = server;
+
+    const response = await fetch(`http://127.0.0.1:${port}/api/agents`);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.agents).toEqual([
+      { id: 'coder', name: 'Coder' },
+      { id: 'writer', name: 'Writer' },
+    ]);
+  });
+
   describe('HTTP endpoints', () => {
     it('GET /health should return status ok', async () => {
       nanoServer = await createServer({

@@ -8,6 +8,7 @@ import type { ServerConfig } from './types.ts';
 export interface NanoSwarmServer {
   app: Express;
   agent: Agent;
+  agents: Agent[];
   start: (port?: number) => Promise<void>;
   stop: () => Promise<void>;
 }
@@ -18,41 +19,72 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
   const port = config.port ?? 4000;
   const host = config.host ?? 'localhost';
 
-  // 1. Create Agent
-  const agentConfig: AgentConfig = {
-    model: config.model,
-    workspace: config.workspace,
-    stores: config.stores,
-    ...config.agentConfig,
-  };
-  const agent = new Agent(agentConfig);
-  await agent.start();
-
-  // 2. A2A Registry
-  const url = `http://${host}:${port}/a2a/jsonrpc`;
-  const card = buildInternalCard(
-    { name, description: config.description ?? 'A NanoSwarm agent', version, url },
-    agent.skills,
-  );
   const registry = new AgentRegistry();
-  registry.register({
-    id: 'default',
-    card,
-    handler: agent,
-  });
-
-  // 3. Orchestrator
   const orchestrator = new Orchestrator();
-  orchestrator.registerAgent({
-    id: 'default',
-    name,
-    handle: async (contextId, text, history) => {
-      const result = await agent.chat(contextId, text, history);
-      return { text: result.text };
-    },
-  });
+  const agents: Agent[] = [];
 
-  // 4. Express app
+  if (config.agents && config.agents.length > 0) {
+    // Multi-agent mode
+    for (const def of config.agents) {
+      const agentConfig: AgentConfig = {
+        model: def.model ?? config.model,
+        workspace: def.workspace ?? config.workspace,
+        stores: config.stores,
+        ...def.agentConfig,
+      };
+      const agent = new Agent(agentConfig);
+      await agent.start();
+      agents.push(agent);
+
+      const url = `http://${host}:${port}/a2a/jsonrpc`;
+      const card = buildInternalCard(
+        { name: def.name, description: def.description ?? `Agent: ${def.name}`, version, url },
+        agent.skills,
+      );
+      registry.register({ id: def.id, card, handler: agent }, { default: def.default });
+
+      orchestrator.registerAgent(
+        {
+          id: def.id,
+          name: def.name,
+          handle: async (contextId, text, history) => {
+            const result = await agent.chat(contextId, text, history);
+            return { text: result.text };
+          },
+        },
+        { default: def.default },
+      );
+    }
+  } else {
+    // Single-agent mode (backward compatible)
+    const agentConfig: AgentConfig = {
+      model: config.model,
+      workspace: config.workspace,
+      stores: config.stores,
+      ...config.agentConfig,
+    };
+    const agent = new Agent(agentConfig);
+    await agent.start();
+    agents.push(agent);
+
+    const url = `http://${host}:${port}/a2a/jsonrpc`;
+    const card = buildInternalCard(
+      { name, description: config.description ?? 'A NanoSwarm agent', version, url },
+      agent.skills,
+    );
+    registry.register({ id: 'default', card, handler: agent });
+
+    orchestrator.registerAgent({
+      id: 'default',
+      name,
+      handle: async (contextId, text, history) => {
+        const result = await agent.chat(contextId, text, history);
+        return { text: result.text };
+      },
+    });
+  }
+
+  // Express app
   const app = express();
 
   // Health endpoint
@@ -66,8 +98,11 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
     });
   });
 
-  // REST Channel
-  app.use('/api', createRestRouter({ handler: orchestrator }));
+  // REST Channel (with listAgents callback)
+  app.use('/api', createRestRouter({
+    handler: orchestrator,
+    listAgents: () => orchestrator.listAgents(),
+  }));
 
   // A2A Gateway
   const taskStore = config.stores?.taskStore
@@ -77,7 +112,8 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
 
   return {
     app,
-    agent,
+    agent: agents[0],
+    agents,
     start: (overridePort?: number) =>
       new Promise<void>((resolve) => {
         const p = overridePort ?? port;
@@ -91,7 +127,7 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
         });
       }),
     stop: async () => {
-      await agent.stop();
+      await Promise.all(agents.map(a => a.stop()));
     },
   };
 }

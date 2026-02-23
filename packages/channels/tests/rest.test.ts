@@ -168,4 +168,74 @@ describe('createRestRouter', () => {
     const body = await response.json();
     expect(body.metadata).toEqual({ model: 'test-model' });
   });
+
+  it('should pass agentId through metadata to handler', async () => {
+    const handler = createTestHandler();
+    const app = express();
+    app.use('/api', createRestRouter({ handler }));
+
+    const result = await listenOnRandomPort(app);
+    server = result.server;
+
+    await fetch(`http://127.0.0.1:${result.port}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'Hello!', agentId: 'coder' }),
+    });
+
+    expect(handler.lastMessage!.metadata).toEqual({ agentId: 'coder' });
+  });
+
+  it('should not set metadata when agentId is absent', async () => {
+    const handler = createTestHandler();
+    const app = express();
+    app.use('/api', createRestRouter({ handler }));
+
+    const result = await listenOnRandomPort(app);
+    server = result.server;
+
+    await fetch(`http://127.0.0.1:${result.port}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: 'Hello!' }),
+    });
+
+    expect(handler.lastMessage!.metadata).toBeUndefined();
+  });
+
+  it('should return agent list when listAgents is provided', async () => {
+    const handler = createTestHandler();
+    const app = express();
+    app.use('/api', createRestRouter({
+      handler,
+      listAgents: () => [
+        { id: 'coder', name: 'Coder' },
+        { id: 'writer', name: 'Writer', description: 'A writer agent' },
+      ],
+    }));
+
+    const result = await listenOnRandomPort(app);
+    server = result.server;
+
+    const response = await fetch(`http://127.0.0.1:${result.port}/api/agents`);
+    expect(response.status).toBe(200);
+
+    const body = await response.json();
+    expect(body.agents).toEqual([
+      { id: 'coder', name: 'Coder' },
+      { id: 'writer', name: 'Writer', description: 'A writer agent' },
+    ]);
+  });
+
+  it('should return 404 for GET /agents when listAgents is not provided', async () => {
+    const handler = createTestHandler();
+    const app = express();
+    app.use('/api', createRestRouter({ handler }));
+
+    const result = await listenOnRandomPort(app);
+    server = result.server;
+
+    const response = await fetch(`http://127.0.0.1:${result.port}/api/agents`);
+    expect(response.status).toBe(404);
+  });
 });

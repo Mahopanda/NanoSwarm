@@ -3,6 +3,7 @@ import type { MessageHandler, NormalizedMessage } from './types.ts';
 
 export interface RestRouterOptions {
   handler: MessageHandler;
+  listAgents?: () => Array<{ id: string; name: string; description?: string }>;
 }
 
 export function createRestRouter(options: RestRouterOptions): Router {
@@ -10,10 +11,11 @@ export function createRestRouter(options: RestRouterOptions): Router {
   router.use(json());
 
   router.post('/chat', async (req, res) => {
-    const { message, userId, conversationId } = req.body as {
+    const { message, userId, conversationId, agentId } = req.body as {
       message?: string;
       userId?: string;
       conversationId?: string;
+      agentId?: string;
     };
 
     if (!message || typeof message !== 'string') {
@@ -26,6 +28,7 @@ export function createRestRouter(options: RestRouterOptions): Router {
       userId: userId ?? 'anonymous',
       conversationId: conversationId ?? crypto.randomUUID(),
       text: message,
+      ...(agentId ? { metadata: { agentId } } : {}),
     };
 
     try {
@@ -41,6 +44,12 @@ export function createRestRouter(options: RestRouterOptions): Router {
       });
     }
   });
+
+  if (options.listAgents) {
+    router.get('/agents', (_req, res) => {
+      res.json({ agents: options.listAgents!() });
+    });
+  }
 
   return router;
 }
