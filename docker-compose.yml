@@ -1,0 +1,17 @@
+services:
+  gateway:
+    build: .
+    ports:
+      - "${PORT:-4000}:4000"
+    volumes:
+      - "${NANOSWARM_HOME:-~/.nanoswarm}:/root/.nanoswarm"
+    restart: unless-stopped
+
+  cli:
+    build: .
+    profiles: ["cli"]
+    stdin_open: true
+    tty: true
+    volumes:
+      - "${NANOSWARM_HOME:-~/.nanoswarm}:/root/.nanoswarm"
+    command: ["agent"]

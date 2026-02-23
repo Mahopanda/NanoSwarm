@@ -4,6 +4,7 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "dev": "WORKSPACE=./workspace bun run --watch packages/server/src/main.ts",
+    "cli": "bun run packages/cli/src/index.ts",
     "test": "bun test",
     "lint": "eslint packages/*/src",
     "format": "prettier --write ."

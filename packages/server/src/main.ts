@@ -208,33 +208,4 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
   };
 }
 
-// CLI entry point
-if (import.meta.main) {
-  const { resolve } = await import('node:path');
-  const { loadConfig, resolveModel, resolveWorkspace } = await import('./config.ts');
-
-  const config = await loadConfig();
-  const model = resolveModel(config);
-
-  const workspace = process.env.WORKSPACE
-    ? resolve(process.env.WORKSPACE)
-    : await resolveWorkspace(config);
-
-  const server = await createServer({
-    name: config.server?.name ?? 'NanoSwarm',
-    port: config.server?.port ?? (Number(process.env.PORT) || 4000),
-    host: config.server?.host ?? 'localhost',
-    model,
-    workspace,
-  });
-
-  await server.start();
-
-  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-    process.on(signal, async () => {
-      console.log(`\n[NanoSwarm] Shutting down...`);
-      await server.stop();
-      process.exit(0);
-    });
-  }
-}
+// CLI entry point moved to @nanoswarm/cli gateway command

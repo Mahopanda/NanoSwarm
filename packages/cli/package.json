@@ -1,0 +1,17 @@
+{
+  "name": "@nanoswarm/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "nanoswarm": "src/index.ts"
+  },
+  "dependencies": {
+    "@nanoswarm/server": "workspace:*",
+    "@nanoswarm/core": "workspace:*",
+    "@nanoswarm/channels": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

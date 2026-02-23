@@ -1,0 +1,10 @@
+node_modules/
+.git/
+.claude/
+data/
+docs/
+workspace/
+*.db
+*.db-journal
+.env
+.DS_Store

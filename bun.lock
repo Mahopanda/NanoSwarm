@@ -30,6 +30,21 @@
         "@types/express": "^5.0.6",
       },
     },
+    "packages/cli": {
+      "name": "@nanoswarm/cli",
+      "version": "0.1.0",
+      "bin": {
+        "nanoswarm": "src/index.ts",
+      },
+      "dependencies": {
+        "@nanoswarm/channels": "workspace:*",
+        "@nanoswarm/core": "workspace:*",
+        "@nanoswarm/server": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+    },
     "packages/core": {
       "name": "@nanoswarm/core",
       "version": "0.1.0",
@@ -101,6 +116,8 @@
     "@nanoswarm/a2a": ["@nanoswarm/a2a@workspace:packages/a2a"],
 
     "@nanoswarm/channels": ["@nanoswarm/channels@workspace:packages/channels"],
+
+    "@nanoswarm/cli": ["@nanoswarm/cli@workspace:packages/cli"],
 
     "@nanoswarm/core": ["@nanoswarm/core@workspace:packages/core"],
 

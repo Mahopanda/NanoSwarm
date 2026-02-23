@@ -21,6 +21,15 @@ export interface NanoSwarmConfig {
     host?: string;
     name?: string;
   };
+  channels?: {
+    cli?: { enabled: boolean; prompt?: string; allowFrom?: string[] };
+    telegram?: { enabled: boolean; token: string; allowFrom?: string[] };
+  };
+  tools?: {
+    web?: { search?: { apiKey: string } };
+    exec?: { timeout?: number };
+    restrictToWorkspace?: boolean;
+  };
 }
 
 const CONFIG_DIR = join(homedir(), '.nanoswarm');
