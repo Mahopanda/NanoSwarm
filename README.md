@@ -121,23 +121,16 @@ GEMINI_API_KEY=your_key bun test packages/server/tests/live.test.ts
 - Unit tests: 411 tests across 54 files, no external dependencies
 - Live tests: 15 tests covering file ops, shell exec, multi-turn conversation, memory consolidation, cron, subagent spawning, SOUL.md personality, and error recovery. Gated by `GEMINI_API_KEY` — `bun test` alone will never trigger them.
 
+
 ## Acknowledgements
 
-This project was inspired by open-source AI agent initiatives such as OpenClaw and [nanobot](https://github.com/HKUDS/nanobot). 
+NanoSwarm was inspired by the architectural concepts of [nanobot](https://github.com/HKUDS/nanobot), particularly its approach to context assembly and tool design.
 
-Exploring nanobot’s architecture — particularly its memory system, context assembly, and tool design — motivated this independent TypeScript implementation built with a different stack (A2A Protocol, Vercel AI SDK, Bun).
+It is an independent TypeScript implementation exploring these ideas within the [Google A2A Protocol](https://github.com/a2aproject/a2a-js) ecosystem, built with [Bun](https://bun.sh) and the [Vercel AI SDK](https://sdk.vercel.ai).
 
-NanoSwarm is **not** a fork or port of nanobot; it is a ground-up reimplementation created as a learning exercise in agent framework design.
 
 
 ## License
+This project is licensed under the terms of the [Apache 2.0 License](LICENSE).
 
-See [LICENSE](LICENSE).
 
----
-
-This project is an independent research and experimental effort
-developed entirely on personal time using personal equipment.
-It is not affiliated with, sponsored by, or endorsed by any employer or organization.
-
-All original design decisions, code, and documentation are the author's own work.
