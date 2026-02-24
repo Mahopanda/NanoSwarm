@@ -1,4 +1,4 @@
-import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, mock, afterEach } from 'bun:test';
 import { connectExternalAgent, connectExternalAgents } from '../src/client-factory.ts';
 import type { AgentCard } from '@a2a-js/sdk';
 
@@ -44,6 +44,7 @@ describe('connectExternalAgent', () => {
 
     expect(entry.id).toBe('ext-1');
     expect(entry.name).toBe('Remote Agent');
+    expect(entry.kind).toBe('external');
     expect(entry.url).toBe('http://localhost:5000');
     expect(entry.card).toBeDefined();
     expect(entry.card!.name).toBe('Remote Agent');
@@ -68,6 +69,7 @@ describe('connectExternalAgent', () => {
     });
 
     expect(entry.id).toBe('ext-1');
+    expect(entry.kind).toBe('external');
     expect(entry.card).toBeUndefined();
     expect(entry.handler).toBeDefined();
   });
@@ -84,6 +86,7 @@ describe('connectExternalAgent', () => {
     });
 
     expect(entry.card).toBeUndefined();
+    expect(entry.kind).toBe('external');
     expect(entry.handler).toBeDefined();
   });
 
@@ -116,6 +119,21 @@ describe('connectExternalAgent', () => {
     const fetchedUrl = (globalThis.fetch as ReturnType<typeof mock>).mock.calls[0][0];
     expect(fetchedUrl).toBe('http://localhost:5000/.well-known/agent-card.json');
   });
+
+  it('should include description when provided', async () => {
+    globalThis.fetch = mock(async () =>
+      new Response(JSON.stringify(mockCard), { status: 200 }),
+    ) as typeof fetch;
+
+    const entry = await connectExternalAgent({
+      id: 'ext-1',
+      name: 'Agent',
+      url: 'http://localhost:5000',
+      description: 'A helpful agent',
+    });
+
+    expect(entry.description).toBe('A helpful agent');
+  });
 });
 
 describe('connectExternalAgents', () => {
@@ -139,7 +157,9 @@ describe('connectExternalAgents', () => {
 
     expect(entries).toHaveLength(2);
     expect(entries[0].id).toBe('ext-1');
+    expect(entries[0].kind).toBe('external');
     expect(entries[1].id).toBe('ext-2');
+    expect(entries[1].kind).toBe('external');
     expect(entries[0].card).toBeDefined();
     expect(entries[1].card).toBeDefined();
   });

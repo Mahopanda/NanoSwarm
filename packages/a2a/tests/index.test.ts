@@ -7,7 +7,7 @@ import {
   filterToExternalCard,
 } from '../src/index.ts';
 import type {
-  InternalAgentEntry,
+  AgentEntry,
   ExternalCardConfig,
   InvokeAgentFn,
   AgentHandler,

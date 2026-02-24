@@ -5,7 +5,7 @@ export interface AgentResult {
   metadata?: Record<string, unknown>;
 }
 
-export interface AgentHandle {
+export interface ResolvedAgent {
   id: string;
   name: string;
   description?: string;
@@ -15,6 +15,13 @@ export interface AgentHandle {
     history?: ChatHistory,
     opts?: { channel?: string; chatId?: string },
   ): Promise<AgentResult>;
+}
+
+export interface AgentStore {
+  get(id: string): ResolvedAgent | undefined;
+  getDefault(): ResolvedAgent | undefined;
+  list(): Array<{ id: string; name: string; description?: string }>;
+  has(id: string): boolean;
 }
 
 export type TaskState = 'pending' | 'working' | 'completed' | 'failed';

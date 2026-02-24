@@ -1,6 +1,6 @@
 import { describe, it, expect, mock } from 'bun:test';
 import { AgentRegistry, buildInternalCard } from '../src/registry.ts';
-import type { InternalAgentEntry, ExternalAgentEntry, AgentHandler } from '../src/types.ts';
+import type { AgentEntry, AgentHandler } from '../src/types.ts';
 import type { AgentCard } from '@a2a-js/sdk';
 import type { LoadedSkill } from '@nanoswarm/core';
 
@@ -24,9 +24,11 @@ function createMockCard(name = 'TestAgent'): AgentCard {
   };
 }
 
-function createEntry(id = 'default', name = 'TestAgent'): InternalAgentEntry {
+function createEntry(id = 'default', name = 'TestAgent'): AgentEntry {
   return {
     id,
+    name,
+    kind: 'internal',
     card: createMockCard(name),
     handler: createMockHandler(),
   };
@@ -156,10 +158,11 @@ describe('AgentRegistry', () => {
   });
 
   describe('external agents', () => {
-    function createExternalEntry(id = 'ext-1', name = 'ExternalAgent'): ExternalAgentEntry {
+    function createExternalEntry(id = 'ext-1', name = 'ExternalAgent'): AgentEntry {
       return {
         id,
         name,
+        kind: 'external',
         url: 'http://localhost:5000',
         handler: createMockHandler(),
       };
@@ -182,33 +185,33 @@ describe('AgentRegistry', () => {
       expect(registry.list()).toHaveLength(2);
     });
 
-    it('should filter internal entries with listInternal', () => {
+    it('should filter internal entries with list + kind', () => {
       const registry = new AgentRegistry();
       registry.register(createEntry('internal-1'));
       registry.register(createExternalEntry('ext-1'));
       registry.register(createEntry('internal-2'));
 
-      const internal = registry.listInternal();
+      const internal = registry.list().filter(e => e.kind === 'internal');
       expect(internal).toHaveLength(2);
-      expect(internal.every((e) => 'card' in e)).toBe(true);
+      expect(internal.every(e => e.card !== undefined)).toBe(true);
     });
 
-    it('should filter external entries with listExternal', () => {
+    it('should filter external entries with list + kind', () => {
       const registry = new AgentRegistry();
       registry.register(createEntry('internal-1'));
       registry.register(createExternalEntry('ext-1'));
       registry.register(createExternalEntry('ext-2'));
 
-      const external = registry.listExternal();
+      const external = registry.list().filter(e => e.kind === 'external');
       expect(external).toHaveLength(2);
-      expect(external.every((e) => 'url' in e)).toBe(true);
+      expect(external.every(e => e.url !== undefined)).toBe(true);
     });
 
-    it('should return empty arrays when no matching type', () => {
+    it('should return empty when no matching kind', () => {
       const registry = new AgentRegistry();
       registry.register(createEntry('internal-1'));
 
-      expect(registry.listExternal()).toEqual([]);
+      expect(registry.list().filter(e => e.kind === 'external')).toEqual([]);
     });
   });
 });

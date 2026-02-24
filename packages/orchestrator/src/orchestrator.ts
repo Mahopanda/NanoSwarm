@@ -1,25 +1,13 @@
 import type { MessageHandler, NormalizedMessage, NormalizedResponse } from '@nanoswarm/channels';
-import type { AgentHandle, AgentResult, ChatHistory } from './types.ts';
+import type { AgentStore, ResolvedAgent, AgentResult, ChatHistory } from './types.ts';
 import { TaskManager } from './task-manager.ts';
 
 export class Orchestrator implements MessageHandler {
-  private agents = new Map<string, AgentHandle>();
-  private defaultAgentId: string | null = null;
+  private store: AgentStore;
   private taskManager = new TaskManager();
 
-  registerAgent(agent: AgentHandle, opts?: { default?: boolean }): void {
-    this.agents.set(agent.id, agent);
-    if (opts?.default || this.agents.size === 1) {
-      this.defaultAgentId = agent.id;
-    }
-  }
-
-  getAgent(id: string): AgentHandle | undefined {
-    return this.agents.get(id);
-  }
-
-  getDefaultAgent(): AgentHandle | undefined {
-    return this.defaultAgentId ? this.agents.get(this.defaultAgentId) : undefined;
+  constructor(store: AgentStore) {
+    this.store = store;
   }
 
   getTaskManager(): TaskManager {
@@ -27,11 +15,7 @@ export class Orchestrator implements MessageHandler {
   }
 
   listAgents(): Array<{ id: string; name: string; description?: string }> {
-    return [...this.agents.values()].map(a => ({
-      id: a.id,
-      name: a.name,
-      ...(a.description ? { description: a.description } : {}),
-    }));
+    return this.store.list();
   }
 
   async invoke(
@@ -64,21 +48,13 @@ export class Orchestrator implements MessageHandler {
     return { text: result.text, metadata: result.metadata };
   }
 
-  unregisterAgent(id: string): boolean {
-    const existed = this.agents.delete(id);
-    if (this.defaultAgentId === id) {
-      this.defaultAgentId = this.agents.size > 0 ? this.agents.keys().next().value! : null;
-    }
-    return existed;
-  }
-
-  private resolveAgentById(agentId: string | undefined): AgentHandle {
+  private resolveAgentById(agentId: string | undefined): ResolvedAgent {
     if (agentId) {
-      const agent = this.agents.get(agentId);
+      const agent = this.store.get(agentId);
       if (!agent) throw new Error(`Agent not found: ${agentId}`);
       return agent;
     }
-    const defaultAgent = this.getDefaultAgent();
+    const defaultAgent = this.store.getDefault();
     if (!defaultAgent) throw new Error('No agent registered');
     return defaultAgent;
   }

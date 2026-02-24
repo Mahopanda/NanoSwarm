@@ -8,8 +8,6 @@ export { createPerAgentGateway, type PerAgentGatewayOptions, type PerAgentGatewa
 export { filterToExternalCard } from './gateway/external-card.ts';
 export { isExternalEntry } from './types.ts';
 export type {
-  InternalAgentEntry,
-  ExternalAgentEntry,
   AgentEntry,
   ExternalCardConfig,
   AgentHandler,

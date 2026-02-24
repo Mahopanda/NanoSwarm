@@ -9,27 +9,22 @@ export interface AgentHandler {
     contextId: string,
     text: string,
     history?: Array<{ role: 'user' | 'assistant'; content: string }>,
+    opts?: { channel?: string; chatId?: string },
   ): Promise<{ text: string }>;
 }
 
-export interface InternalAgentEntry {
-  id: string;
-  card: AgentCard;
-  handler: AgentHandler;
-}
-
-export interface ExternalAgentEntry {
+export interface AgentEntry {
   id: string;
   name: string;
-  url: string;
+  description?: string;
+  kind: 'internal' | 'external';
   card?: AgentCard;
+  url?: string;
   handler: AgentHandler;
 }
 
-export type AgentEntry = InternalAgentEntry | ExternalAgentEntry;
-
-export function isExternalEntry(entry: AgentEntry): entry is ExternalAgentEntry {
-  return 'url' in entry;
+export function isExternalEntry(entry: AgentEntry): boolean {
+  return entry.kind === 'external';
 }
 
 export interface ExternalCardConfig {

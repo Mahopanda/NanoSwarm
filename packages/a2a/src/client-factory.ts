@@ -1,6 +1,6 @@
 import { A2AClientHandler } from './client-handler.ts';
 import type { AgentCard } from '@a2a-js/sdk';
-import type { ExternalAgentEntry } from './types.ts';
+import type { AgentEntry } from './types.ts';
 
 export interface ExternalAgentDefinition {
   id: string;
@@ -9,7 +9,7 @@ export interface ExternalAgentDefinition {
   description?: string;
 }
 
-export async function connectExternalAgent(def: ExternalAgentDefinition): Promise<ExternalAgentEntry> {
+export async function connectExternalAgent(def: ExternalAgentDefinition): Promise<AgentEntry> {
   const handler = new A2AClientHandler(def.url);
 
   let card: AgentCard | undefined;
@@ -23,9 +23,17 @@ export async function connectExternalAgent(def: ExternalAgentDefinition): Promis
     // Card fetch failed — logged at server startup
   }
 
-  return { id: def.id, name: def.name, url: def.url, card, handler };
+  return {
+    id: def.id,
+    name: def.name,
+    description: def.description,
+    kind: 'external',
+    url: def.url,
+    card,
+    handler,
+  };
 }
 
-export async function connectExternalAgents(defs: ExternalAgentDefinition[]): Promise<ExternalAgentEntry[]> {
+export async function connectExternalAgents(defs: ExternalAgentDefinition[]): Promise<AgentEntry[]> {
   return Promise.all(defs.map(connectExternalAgent));
 }
