@@ -1,4 +1,4 @@
-.PHONY: install dev test demo-up demo-down demo-logs demo-ps
+.PHONY: install dev test demo-up demo-down demo-logs demo-ps demo-test
 
 # ── Development ──────────────────────────────────────────────
 
@@ -32,6 +32,9 @@ demo-logs:
 
 demo-ps:
 	$(DEMO_COMPOSE) ps
+
+demo-test:
+	@bash demo/e2e-test.sh
 
 demo/.env:
 	@echo "GEMINI_API_KEY=your-key-here" > demo/.env

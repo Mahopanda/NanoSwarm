@@ -58,6 +58,38 @@ docker compose -f demo/docker-compose.yml up --build
 
 ## Verification
 
+### Automated (recommended)
+
+Run the full E2E test suite (13 tests, no API key required):
+
+```bash
+make demo-test
+```
+
+Expected output:
+
+```
+NanoSwarm E2E Test Suite
+
+Checking services... ready.
+
+── Health Checks ──
+
+  PASS seller-a health
+  PASS seller-b health
+  PASS gateway health
+
+...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  All passed: 14/14
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+With `GEMINI_API_KEY` set, an additional LLM integration test runs (the `/api/chat` endpoint). Without it, that test is skipped.
+
+### Manual
+
 ```bash
 # Seller health
 curl http://localhost:4001/health
