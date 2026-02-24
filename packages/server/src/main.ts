@@ -98,13 +98,19 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
   // External agents (optional)
   if (config.externalAgents) {
     for (const ext of config.externalAgents) {
-      const entry = connectExternalAgent(ext);
+      const entry = await connectExternalAgent(ext);
       registry.register(entry);
       orchestrator.registerAgent({
         id: ext.id,
         name: ext.name,
         handle: async (contextId, text) => entry.handler.chat(contextId, text),
       });
+
+      if (entry.card) {
+        console.log(`[${name}] External agent "${ext.id}" connected: ${ext.url} (${entry.card.name})`);
+      } else {
+        console.warn(`[${name}] External agent "${ext.id}" registered but card unavailable: ${ext.url}`);
+      }
     }
   }
 
