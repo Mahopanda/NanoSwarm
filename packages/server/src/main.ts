@@ -1,6 +1,6 @@
 import express, { type Express } from 'express';
 import { Agent, type AgentConfig, createInvokeAgentTool, type AgentResolver } from '@nanoswarm/core';
-import { AgentRegistry, buildInternalCard, createGateway, connectExternalAgent } from '@nanoswarm/a2a';
+import { AgentRegistry, buildInternalCard, createGateway, createPerAgentGateway, connectExternalAgent } from '@nanoswarm/a2a';
 import {
   createRestRouter,
   MessageBus,
@@ -146,13 +146,7 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
     });
   });
 
-  // REST Channel (with listAgents callback)
-  app.use('/api', createRestRouter({
-    handler: orchestrator,
-    listAgents: () => orchestrator.listAgents(),
-  }));
-
-  // A2A Gateway
+  // A2A Gateway (global — default agent)
   const defaultEntry = registry.getDefault();
   if (!defaultEntry || !defaultEntry.card) {
     throw new Error('Cannot create gateway: no default agent with card');
@@ -165,6 +159,51 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
     invokeAgent: (agentId, contextId, text, history) =>
       orchestrator.invoke(agentId, contextId, text, history),
     taskStore,
+  }));
+
+  // Per-Agent A2A Gateway
+  const getAgentCard = (agentId: string) => {
+    const entry = registry.get(agentId);
+    if (!entry?.card) return undefined;
+    return {
+      ...entry.card,
+      url: `http://${host}:${port}/a2a/agents/${agentId}/jsonrpc`,
+    };
+  };
+
+  const perAgentGW = createPerAgentGateway({
+    getCard: getAgentCard,
+    invokeAgent: (agentId, contextId, text, history) =>
+      orchestrator.invoke(agentId, contextId, text, history),
+    taskStore,
+  });
+  app.use('/a2a', perAgentGW.router);
+
+  // REST Channel (with listAgents + dynamic register/unregister)
+  app.use('/api', createRestRouter({
+    handler: orchestrator,
+    listAgents: () => orchestrator.listAgents(),
+    onRegisterAgent: async ({ id, name: agentName, url, description }) => {
+      if (orchestrator.getAgent(id)) {
+        throw new Error(`Agent already exists: ${id}`);
+      }
+      const entry = await connectExternalAgent({ id, name: agentName, url, description });
+      registry.register(entry);
+      orchestrator.registerAgent({
+        id,
+        name: agentName,
+        description: description ?? entry.card?.description,
+        handle: async (contextId, text) => entry.handler.chat(contextId, text),
+      });
+    },
+    onUnregisterAgent: async (id) => {
+      const removed = orchestrator.unregisterAgent(id);
+      if (removed) {
+        registry.unregister(id);
+        perAgentGW.invalidate(id);
+      }
+      return removed;
+    },
   }));
 
   // Channel layer (optional — only when config.channels is present)
@@ -260,6 +299,7 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
           console.log(`[${name}] REST API: http://${host}:${p}/api/chat`);
           console.log(`[${name}] Agent Card: http://${host}:${p}/.well-known/agent-card.json`);
           console.log(`[${name}] JSON-RPC: http://${host}:${p}/a2a/jsonrpc`);
+          console.log(`[${name}] Per-Agent A2A: http://${host}:${p}/a2a/agents/:id/jsonrpc`);
           console.log(`[${name}] Health: http://${host}:${p}/health`);
           resolve();
         });

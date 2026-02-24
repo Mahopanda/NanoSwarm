@@ -238,4 +238,110 @@ describe('createRestRouter', () => {
     const response = await fetch(`http://127.0.0.1:${result.port}/api/agents`);
     expect(response.status).toBe(404);
   });
+
+  describe('POST /agents/register', () => {
+    it('should register an agent successfully', async () => {
+      const handler = createTestHandler();
+      const onRegisterAgent = mock(async () => {});
+      const app = express();
+      app.use('/api', createRestRouter({ handler, onRegisterAgent }));
+
+      const result = await listenOnRandomPort(app);
+      server = result.server;
+
+      const response = await fetch(`http://127.0.0.1:${result.port}/api/agents/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: 'ext1', name: 'External', url: 'http://other:5000' }),
+      });
+
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.ok).toBe(true);
+      expect(body.agentId).toBe('ext1');
+      expect(onRegisterAgent).toHaveBeenCalled();
+    });
+
+    it('should return 400 when required fields are missing', async () => {
+      const handler = createTestHandler();
+      const onRegisterAgent = mock(async () => {});
+      const app = express();
+      app.use('/api', createRestRouter({ handler, onRegisterAgent }));
+
+      const result = await listenOnRandomPort(app);
+      server = result.server;
+
+      const response = await fetch(`http://127.0.0.1:${result.port}/api/agents/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: 'ext1' }),
+      });
+
+      expect(response.status).toBe(400);
+      const body = await response.json();
+      expect(body.error).toContain('Missing required fields');
+      expect(onRegisterAgent).not.toHaveBeenCalled();
+    });
+
+    it('should return 500 when registration callback throws', async () => {
+      const handler = createTestHandler();
+      const onRegisterAgent = mock(async () => {
+        throw new Error('Agent already exists: ext1');
+      });
+      const app = express();
+      app.use('/api', createRestRouter({ handler, onRegisterAgent }));
+
+      const result = await listenOnRandomPort(app);
+      server = result.server;
+
+      const response = await fetch(`http://127.0.0.1:${result.port}/api/agents/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: 'ext1', name: 'External', url: 'http://other:5000' }),
+      });
+
+      expect(response.status).toBe(500);
+      const body = await response.json();
+      expect(body.error).toContain('Agent already exists');
+    });
+  });
+
+  describe('DELETE /agents/:id', () => {
+    it('should unregister an agent successfully', async () => {
+      const handler = createTestHandler();
+      const onUnregisterAgent = mock(async () => true);
+      const app = express();
+      app.use('/api', createRestRouter({ handler, onUnregisterAgent }));
+
+      const result = await listenOnRandomPort(app);
+      server = result.server;
+
+      const response = await fetch(`http://127.0.0.1:${result.port}/api/agents/ext1`, {
+        method: 'DELETE',
+      });
+
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.ok).toBe(true);
+      expect(onUnregisterAgent).toHaveBeenCalledWith('ext1');
+    });
+
+    it('should return 404 when agent not found', async () => {
+      const handler = createTestHandler();
+      const onUnregisterAgent = mock(async () => false);
+      const app = express();
+      app.use('/api', createRestRouter({ handler, onUnregisterAgent }));
+
+      const result = await listenOnRandomPort(app);
+      server = result.server;
+
+      const response = await fetch(`http://127.0.0.1:${result.port}/api/agents/unknown`, {
+        method: 'DELETE',
+      });
+
+      expect(response.status).toBe(404);
+      const body = await response.json();
+      expect(body.error).toContain('Agent not found');
+    });
+  });
 });

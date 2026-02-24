@@ -105,6 +105,56 @@ describe('AgentRegistry', () => {
     });
   });
 
+  describe('unregister', () => {
+    it('should remove an existing agent', () => {
+      const registry = new AgentRegistry();
+      registry.register(createEntry('a1'));
+
+      expect(registry.unregister('a1')).toBe(true);
+      expect(registry.has('a1')).toBe(false);
+      expect(registry.get('a1')).toBeUndefined();
+    });
+
+    it('should return false for non-existent id', () => {
+      const registry = new AgentRegistry();
+      expect(registry.unregister('nonexistent')).toBe(false);
+    });
+
+    it('should reassign default when default agent is removed', () => {
+      const registry = new AgentRegistry();
+      const entry1 = createEntry('a1', 'Agent1');
+      const entry2 = createEntry('a2', 'Agent2');
+      registry.register(entry1);
+      registry.register(entry2);
+
+      // a1 is default (first registered)
+      expect(registry.getDefault()).toBe(entry1);
+
+      registry.unregister('a1');
+      // default should move to next available
+      expect(registry.getDefault()).toBe(entry2);
+    });
+
+    it('should set default to null when last agent is removed', () => {
+      const registry = new AgentRegistry();
+      registry.register(createEntry('a1'));
+
+      registry.unregister('a1');
+      expect(registry.getDefault()).toBeUndefined();
+    });
+
+    it('should not change default when non-default agent is removed', () => {
+      const registry = new AgentRegistry();
+      const entry1 = createEntry('a1', 'Agent1');
+      const entry2 = createEntry('a2', 'Agent2');
+      registry.register(entry1);
+      registry.register(entry2);
+
+      registry.unregister('a2');
+      expect(registry.getDefault()).toBe(entry1);
+    });
+  });
+
   describe('external agents', () => {
     function createExternalEntry(id = 'ext-1', name = 'ExternalAgent'): ExternalAgentEntry {
       return {

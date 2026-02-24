@@ -64,6 +64,14 @@ export class Orchestrator implements MessageHandler {
     return { text: result.text, metadata: result.metadata };
   }
 
+  unregisterAgent(id: string): boolean {
+    const existed = this.agents.delete(id);
+    if (this.defaultAgentId === id) {
+      this.defaultAgentId = this.agents.size > 0 ? this.agents.keys().next().value! : null;
+    }
+    return existed;
+  }
+
   private resolveAgentById(agentId: string | undefined): AgentHandle {
     if (agentId) {
       const agent = this.agents.get(agentId);

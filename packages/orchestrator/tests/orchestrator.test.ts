@@ -303,6 +303,74 @@ describe('Orchestrator', () => {
     });
   });
 
+  describe('unregisterAgent', () => {
+    it('should remove an existing agent', () => {
+      const orchestrator = new Orchestrator();
+      orchestrator.registerAgent(createMockAgent('a1', 'Agent 1'));
+
+      expect(orchestrator.unregisterAgent('a1')).toBe(true);
+      expect(orchestrator.getAgent('a1')).toBeUndefined();
+    });
+
+    it('should return false for non-existent id', () => {
+      const orchestrator = new Orchestrator();
+      expect(orchestrator.unregisterAgent('ghost')).toBe(false);
+    });
+
+    it('should reassign default when default agent is removed', () => {
+      const orchestrator = new Orchestrator();
+      const agent1 = createMockAgent('a1', 'Agent 1');
+      const agent2 = createMockAgent('a2', 'Agent 2');
+      orchestrator.registerAgent(agent1);
+      orchestrator.registerAgent(agent2);
+
+      expect(orchestrator.getDefaultAgent()).toBe(agent1);
+
+      orchestrator.unregisterAgent('a1');
+      expect(orchestrator.getDefaultAgent()).toBe(agent2);
+    });
+
+    it('should set default to null when last agent is removed', () => {
+      const orchestrator = new Orchestrator();
+      orchestrator.registerAgent(createMockAgent('a1', 'Agent 1'));
+
+      orchestrator.unregisterAgent('a1');
+      expect(orchestrator.getDefaultAgent()).toBeUndefined();
+    });
+
+    it('should not change default when non-default agent is removed', () => {
+      const orchestrator = new Orchestrator();
+      const agent1 = createMockAgent('a1', 'Agent 1');
+      const agent2 = createMockAgent('a2', 'Agent 2');
+      orchestrator.registerAgent(agent1);
+      orchestrator.registerAgent(agent2);
+
+      orchestrator.unregisterAgent('a2');
+      expect(orchestrator.getDefaultAgent()).toBe(agent1);
+    });
+
+    it('should not list removed agent', () => {
+      const orchestrator = new Orchestrator();
+      orchestrator.registerAgent(createMockAgent('a1', 'Agent 1'));
+      orchestrator.registerAgent(createMockAgent('a2', 'Agent 2'));
+
+      orchestrator.unregisterAgent('a1');
+      const list = orchestrator.listAgents();
+      expect(list).toHaveLength(1);
+      expect(list[0].id).toBe('a2');
+    });
+
+    it('should throw when invoking removed agent', async () => {
+      const orchestrator = new Orchestrator();
+      orchestrator.registerAgent(createMockAgent('a1', 'Agent 1'));
+      orchestrator.unregisterAgent('a1');
+
+      await expect(orchestrator.invoke('a1', 'conv-1', 'Hello')).rejects.toThrow(
+        'Agent not found: a1',
+      );
+    });
+  });
+
   describe('listAgents', () => {
     it('should return all registered agents', () => {
       const orchestrator = new Orchestrator();

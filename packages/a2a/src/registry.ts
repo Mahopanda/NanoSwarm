@@ -44,6 +44,14 @@ export class AgentRegistry {
   has(id: string): boolean {
     return this.agents.has(id);
   }
+
+  unregister(id: string): boolean {
+    const existed = this.agents.delete(id);
+    if (this.defaultId === id) {
+      this.defaultId = this.agents.size > 0 ? this.agents.keys().next().value! : null;
+    }
+    return existed;
+  }
 }
 
 export function buildInternalCard(
