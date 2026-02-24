@@ -9,6 +9,9 @@ RUN bun install
 
 COPY . .
 
+# Run as non-root
+USER bun
+
 EXPOSE 4001 4002
 # CMD is overridden by docker-compose to specify seller-a or seller-b
 CMD ["bun", "run", "seller-a.ts"]

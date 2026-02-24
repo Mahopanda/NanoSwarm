@@ -25,6 +25,10 @@ graph LR
 | **seller-a** | "CrewAI" mock | Sony WH/WF series, JBL Tour/Live/Tune | 4001 |
 | **seller-b** | "LangGraph" mock | AKG N9/K371/N700, Jabra Elite series | 4002 |
 
+## Security Notice
+
+> **This demo is for local development only.** All ports are bound to `127.0.0.1` and A2A endpoints have no authentication. Do not expose to the public internet.
+
 ## Prerequisites
 
 - Docker & Docker Compose

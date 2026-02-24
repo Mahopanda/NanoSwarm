@@ -15,6 +15,10 @@ RUN bun install --frozen-lockfile
 COPY tsconfig.json ./
 COPY packages/ packages/
 
+# Prepare writable dirs for non-root user, then drop privileges
+RUN mkdir -p /home/bun/.nanoswarm/workspace && chown -R bun:bun /home/bun/.nanoswarm
+USER bun
+
 EXPOSE 4000
 ENTRYPOINT ["bun", "run", "packages/cli/src/index.ts"]
 CMD ["gateway"]

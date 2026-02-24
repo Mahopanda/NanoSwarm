@@ -4,7 +4,7 @@ services:
       context: ./sellers
     command: ["bun", "run", "seller-a.ts"]
     ports:
-      - "4001:4001"
+      - "127.0.0.1:4001:4001"
     environment:
       - PORT=4001
     networks:
@@ -21,7 +21,7 @@ services:
       context: ./sellers
     command: ["bun", "run", "seller-b.ts"]
     ports:
-      - "4002:4002"
+      - "127.0.0.1:4002:4002"
     environment:
       - PORT=4002
     networks:
@@ -38,12 +38,12 @@ services:
       context: ..
       dockerfile: Dockerfile
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - WORKSPACE=/app/demo-workspace
     volumes:
-      - ./gateway/nanoswarm.config.json:/root/.nanoswarm/config.json:ro
+      - ./gateway/nanoswarm.config.json:/home/bun/.nanoswarm/config.json:ro
       - ./gateway/workspace:/app/demo-workspace:ro
     depends_on:
       seller-a:
