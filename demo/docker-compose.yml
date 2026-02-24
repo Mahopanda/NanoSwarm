@@ -43,6 +43,7 @@ services:
       - "127.0.0.1:4000:4000"
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-demo-admin-key}
       - WORKSPACE=/app/demo-workspace
     volumes:
       - ./gateway/nanoswarm.config.json:/home/bun/.nanoswarm/config.json:ro

@@ -13,7 +13,8 @@
   "server": {
     "port": 4000,
     "host": "0.0.0.0",
-    "name": "Shopping Assistant"
+    "name": "Shopping Assistant",
+    "adminApiKey": "${ADMIN_API_KEY}"
   },
   "externalAgents": [
     {
