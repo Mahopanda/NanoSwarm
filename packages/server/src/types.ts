@@ -17,6 +17,12 @@ export interface AgentDefinition {
   default?: boolean;
 }
 
+export interface ExternalAgentConfig {
+  id: string;
+  name: string;
+  url: string;
+}
+
 export interface ServerConfig {
   name?: string;        // default: 'NanoSwarm'
   description?: string; // default: 'A NanoSwarm agent'
@@ -28,5 +34,6 @@ export interface ServerConfig {
   stores?: Stores;
   agentConfig?: Partial<Omit<AgentConfig, 'model' | 'workspace' | 'stores'>>;
   agents?: AgentDefinition[];
+  externalAgents?: ExternalAgentConfig[];
   channels?: ChannelsConfig;
 }

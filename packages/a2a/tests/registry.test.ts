@@ -1,6 +1,6 @@
 import { describe, it, expect, mock } from 'bun:test';
 import { AgentRegistry, buildInternalCard } from '../src/registry.ts';
-import type { InternalAgentEntry, AgentHandler } from '../src/types.ts';
+import type { InternalAgentEntry, ExternalAgentEntry, AgentHandler } from '../src/types.ts';
 import type { AgentCard } from '@a2a-js/sdk';
 import type { LoadedSkill } from '@nanoswarm/core';
 
@@ -102,6 +102,63 @@ describe('AgentRegistry', () => {
     it('should return false for unregistered agent', () => {
       const registry = new AgentRegistry();
       expect(registry.has('a1')).toBe(false);
+    });
+  });
+
+  describe('external agents', () => {
+    function createExternalEntry(id = 'ext-1', name = 'ExternalAgent'): ExternalAgentEntry {
+      return {
+        id,
+        name,
+        url: 'http://localhost:5000',
+        handler: createMockHandler(),
+      };
+    }
+
+    it('should register external agent entry', () => {
+      const registry = new AgentRegistry();
+      const entry = createExternalEntry();
+      registry.register(entry);
+
+      expect(registry.get('ext-1')).toBe(entry);
+      expect(registry.has('ext-1')).toBe(true);
+    });
+
+    it('should list mixed internal and external entries', () => {
+      const registry = new AgentRegistry();
+      registry.register(createEntry('internal-1'));
+      registry.register(createExternalEntry('ext-1'));
+
+      expect(registry.list()).toHaveLength(2);
+    });
+
+    it('should filter internal entries with listInternal', () => {
+      const registry = new AgentRegistry();
+      registry.register(createEntry('internal-1'));
+      registry.register(createExternalEntry('ext-1'));
+      registry.register(createEntry('internal-2'));
+
+      const internal = registry.listInternal();
+      expect(internal).toHaveLength(2);
+      expect(internal.every((e) => 'card' in e)).toBe(true);
+    });
+
+    it('should filter external entries with listExternal', () => {
+      const registry = new AgentRegistry();
+      registry.register(createEntry('internal-1'));
+      registry.register(createExternalEntry('ext-1'));
+      registry.register(createExternalEntry('ext-2'));
+
+      const external = registry.listExternal();
+      expect(external).toHaveLength(2);
+      expect(external.every((e) => 'url' in e)).toBe(true);
+    });
+
+    it('should return empty arrays when no matching type', () => {
+      const registry = new AgentRegistry();
+      registry.register(createEntry('internal-1'));
+
+      expect(registry.listExternal()).toEqual([]);
     });
   });
 });

@@ -22,7 +22,7 @@ export function createGateway(options: GatewayOptions): Router {
   const { registry } = options;
 
   const defaultEntry = registry.getDefault();
-  if (!defaultEntry) {
+  if (!defaultEntry || !defaultEntry.card) {
     throw new Error('Cannot create gateway: no default agent registered');
   }
 

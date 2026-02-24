@@ -1,6 +1,6 @@
 import express, { type Express } from 'express';
-import { Agent, type AgentConfig } from '@nanoswarm/core';
-import { AgentRegistry, buildInternalCard, createGateway } from '@nanoswarm/a2a';
+import { Agent, type AgentConfig, createInvokeAgentTool, type AgentResolver } from '@nanoswarm/core';
+import { AgentRegistry, buildInternalCard, createGateway, connectExternalAgent } from '@nanoswarm/a2a';
 import {
   createRestRouter,
   MessageBus,
@@ -93,6 +93,40 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
         return { text: result.text };
       },
     });
+  }
+
+  // External agents (optional)
+  if (config.externalAgents) {
+    for (const ext of config.externalAgents) {
+      const entry = connectExternalAgent(ext);
+      registry.register(entry);
+      orchestrator.registerAgent({
+        id: ext.id,
+        name: ext.name,
+        handle: async (contextId, text) => entry.handler.chat(contextId, text),
+      });
+    }
+  }
+
+  // AgentResolver — lets any agent invoke other agents via invoke_agent tool
+  const agentResolver: AgentResolver = {
+    list: () =>
+      registry.list().map((e) => ({
+        id: e.id,
+        name: 'name' in e ? e.name : e.id,
+        description: 'card' in e && e.card ? e.card.description : undefined,
+      })),
+    invoke: async (agentId, contextId, text) => {
+      const entry = registry.get(agentId);
+      if (!entry) throw new Error(`Agent not found: ${agentId}`);
+      return entry.handler.chat(contextId, text);
+    },
+  };
+
+  // Register invoke_agent tool on all internal agents
+  const invokeAgentTool = createInvokeAgentTool(agentResolver);
+  for (const agent of agents) {
+    agent.registry.register(invokeAgentTool);
   }
 
   // Express app

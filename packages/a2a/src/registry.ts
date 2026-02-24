@@ -1,6 +1,7 @@
 import type { AgentCard, AgentSkill } from '@a2a-js/sdk';
 import type { LoadedSkill } from '@nanoswarm/core';
-import type { InternalAgentEntry, AgentHandler } from './types.ts';
+import type { InternalAgentEntry, ExternalAgentEntry, AgentEntry, AgentHandler } from './types.ts';
+import { isExternalEntry } from './types.ts';
 
 export interface AgentCardConfig {
   name: string;
@@ -10,26 +11,34 @@ export interface AgentCardConfig {
 }
 
 export class AgentRegistry {
-  private agents = new Map<string, InternalAgentEntry>();
+  private agents = new Map<string, AgentEntry>();
   private defaultId: string | null = null;
 
-  register(entry: InternalAgentEntry, opts?: { default?: boolean }): void {
+  register(entry: AgentEntry, opts?: { default?: boolean }): void {
     this.agents.set(entry.id, entry);
     if (opts?.default || this.agents.size === 1) {
       this.defaultId = entry.id;
     }
   }
 
-  get(id: string): InternalAgentEntry | undefined {
+  get(id: string): AgentEntry | undefined {
     return this.agents.get(id);
   }
 
-  getDefault(): InternalAgentEntry | undefined {
+  getDefault(): AgentEntry | undefined {
     return this.defaultId ? this.agents.get(this.defaultId) : undefined;
   }
 
-  list(): InternalAgentEntry[] {
+  list(): AgentEntry[] {
     return [...this.agents.values()];
+  }
+
+  listInternal(): InternalAgentEntry[] {
+    return [...this.agents.values()].filter((e): e is InternalAgentEntry => !isExternalEntry(e));
+  }
+
+  listExternal(): ExternalAgentEntry[] {
+    return [...this.agents.values()].filter((e): e is ExternalAgentEntry => isExternalEntry(e));
   }
 
   has(id: string): boolean {

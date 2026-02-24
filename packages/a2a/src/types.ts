@@ -18,6 +18,20 @@ export interface InternalAgentEntry {
   handler: AgentHandler;
 }
 
+export interface ExternalAgentEntry {
+  id: string;
+  name: string;
+  url: string;
+  card?: AgentCard;
+  handler: AgentHandler;
+}
+
+export type AgentEntry = InternalAgentEntry | ExternalAgentEntry;
+
+export function isExternalEntry(entry: AgentEntry): entry is ExternalAgentEntry {
+  return 'url' in entry;
+}
+
 export interface ExternalCardConfig {
   baseUrl: string;
   skillFilter?: (skill: AgentSkill) => boolean;

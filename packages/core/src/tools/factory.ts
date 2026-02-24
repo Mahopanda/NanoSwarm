@@ -9,12 +9,14 @@ import { createWebSearchTool, createWebFetchTool } from './web.ts';
 import { createMessageTool } from './message.ts';
 import { createSpawnTool } from './spawn.ts';
 import { createCronTool } from './cron.ts';
+import { createInvokeAgentTool, type AgentResolver } from './invoke-agent.ts';
 
 export interface ToolFactoryConfig {
   eventBus: EventBus;
   subagentManager?: SubagentManager;
   cronService?: CronService;
   execOptions?: ExecToolOptions;
+  agentResolver?: AgentResolver;
 }
 
 export function registerDefaultTools(
@@ -45,5 +47,10 @@ export function registerDefaultTools(
   // Cron — only when CronService is available
   if (config.cronService) {
     registry.register(createCronTool(config.cronService));
+  }
+
+  // Invoke Agent — only when AgentResolver is available
+  if (config.agentResolver) {
+    registry.register(createInvokeAgentTool(config.agentResolver));
   }
 }
