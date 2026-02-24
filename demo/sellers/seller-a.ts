@@ -55,11 +55,12 @@ function searchProducts(query: string): Product[] {
 }
 
 const port = Number(process.env.PORT) || 4001;
+const publicUrl = process.env.PUBLIC_URL || `http://0.0.0.0:${port}`;
 
 const card: AgentCard = {
   name: 'CrewAI Electronics Store',
   description: 'A CrewAI-powered electronics store specializing in Sony and JBL audio products.',
-  url: `http://0.0.0.0:${port}/a2a/jsonrpc`,
+  url: `${publicUrl}/a2a/jsonrpc`,
   version: '1.0.0',
   capabilities: {},
   skills: [

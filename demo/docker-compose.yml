@@ -7,6 +7,7 @@ services:
       - "127.0.0.1:4001:4001"
     environment:
       - PORT=4001
+      - PUBLIC_URL=http://seller-a:4001
     networks:
       - a2a-demo
     healthcheck:
@@ -24,6 +25,7 @@ services:
       - "127.0.0.1:4002:4002"
     environment:
       - PORT=4002
+      - PUBLIC_URL=http://seller-b:4002
     networks:
       - a2a-demo
     healthcheck:

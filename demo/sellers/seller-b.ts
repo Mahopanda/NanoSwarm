@@ -57,11 +57,12 @@ function recommendProducts(query: string): Product[] {
 }
 
 const port = Number(process.env.PORT) || 4002;
+const publicUrl = process.env.PUBLIC_URL || `http://0.0.0.0:${port}`;
 
 const card: AgentCard = {
   name: 'LangGraph Product Advisor',
   description: 'A LangGraph-powered product advisor specializing in AKG and Jabra audio equipment. Returns top recommendations by rating.',
-  url: `http://0.0.0.0:${port}/a2a/jsonrpc`,
+  url: `${publicUrl}/a2a/jsonrpc`,
   version: '1.0.0',
   capabilities: {},
   skills: [
