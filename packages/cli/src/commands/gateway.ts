@@ -16,6 +16,7 @@ export async function runGateway(): Promise<void> {
     host: config.server?.host ?? 'localhost',
     model,
     workspace,
+    externalAgents: config.externalAgents,
     channels: config.channels,
   });
 

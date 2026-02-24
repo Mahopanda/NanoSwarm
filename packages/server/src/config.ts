@@ -3,6 +3,13 @@ import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import type { LanguageModel } from 'ai';
 
+export interface ExternalAgentRef {
+  id: string;
+  name: string;
+  url: string;
+  description?: string;
+}
+
 export interface NanoSwarmConfig {
   agents: {
     defaults: {
@@ -21,6 +28,7 @@ export interface NanoSwarmConfig {
     host?: string;
     name?: string;
   };
+  externalAgents?: ExternalAgentRef[];
   channels?: {
     cli?: { enabled: boolean; prompt?: string; allowFrom?: string[] };
     telegram?: { enabled: boolean; token: string; allowFrom?: string[]; adminUsers?: string[] };
@@ -35,11 +43,19 @@ export interface NanoSwarmConfig {
 const CONFIG_DIR = join(homedir(), '.nanoswarm');
 const CONFIG_PATH = join(CONFIG_DIR, 'config.json');
 
+/** Replace `${VAR_NAME}` placeholders with `process.env.VAR_NAME` */
+function interpolateEnv(raw: string): string {
+  return raw.replace(/\$\{([^}]+)\}/g, (_match, varName: string) => {
+    return process.env[varName] ?? '';
+  });
+}
+
 export async function loadConfig(path?: string): Promise<NanoSwarmConfig> {
   const configPath = path ?? CONFIG_PATH;
   try {
     const raw = await readFile(configPath, 'utf-8');
-    return JSON.parse(raw) as NanoSwarmConfig;
+    const interpolated = interpolateEnv(raw);
+    return JSON.parse(interpolated) as NanoSwarmConfig;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       throw new Error(

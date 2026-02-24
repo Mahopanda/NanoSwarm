@@ -108,6 +108,40 @@ Config is mounted from `~/.nanoswarm` on the host (override with `NANOSWARM_HOME
 - **gateway** — A2A HTTP server (always running)
 - **cli** — One-off CLI commands (e.g. `docker compose run --rm cli status`)
 
+## Demo: A2A Cross-Framework Shopping
+
+A `docker compose` demo where a NanoSwarm shopping assistant queries two mock seller agents (CrewAI + LangGraph) over A2A protocol.
+
+```mermaid
+graph LR
+  User((User))
+  GW["gateway :4000<br/>NanoSwarm"]
+  SA["seller-a :4001<br/>CrewAI mock"]
+  SB["seller-b :4002<br/>LangGraph mock"]
+
+  User -->|POST /api/chat| GW
+  GW -->|A2A| SA
+  GW -->|A2A| SB
+```
+
+```bash
+# Set up API key
+cp demo/.env.example demo/.env   # edit and add GEMINI_API_KEY
+
+# Start all 3 services
+make demo-up
+
+# Try a query
+curl -X POST http://localhost:4000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Find me wireless headphones under $300"}'
+
+# Stop
+make demo-down
+```
+
+See [`demo/README.md`](demo/README.md) for full architecture and verification steps.
+
 ## Testing
 
 ```bash
