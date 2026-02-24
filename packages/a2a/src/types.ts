@@ -36,3 +36,10 @@ export interface ExternalCardConfig {
   baseUrl: string;
   skillFilter?: (skill: AgentSkill) => boolean;
 }
+
+export type InvokeAgentFn = (
+  agentId: string | undefined,
+  contextId: string,
+  text: string,
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>,
+) => Promise<{ text: string }>;

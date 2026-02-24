@@ -58,6 +58,7 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
         {
           id: def.id,
           name: def.name,
+          description: def.description,
           handle: async (contextId, text, history, opts) => {
             const result = await agent.chat(contextId, text, history, opts);
             return { text: result.text };
@@ -88,6 +89,7 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
     orchestrator.registerAgent({
       id: 'default',
       name,
+      description: config.description ?? 'A NanoSwarm agent',
       handle: async (contextId, text, history, opts) => {
         const result = await agent.chat(contextId, text, history, opts);
         return { text: result.text };
@@ -103,6 +105,7 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
       orchestrator.registerAgent({
         id: ext.id,
         name: ext.name,
+        description: ext.description ?? entry.card?.description,
         handle: async (contextId, text) => entry.handler.chat(contextId, text),
       });
 
@@ -116,16 +119,10 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
 
   // AgentResolver — lets any agent invoke other agents via invoke_agent tool
   const agentResolver: AgentResolver = {
-    list: () =>
-      registry.list().map((e) => ({
-        id: e.id,
-        name: 'name' in e ? e.name : e.id,
-        description: 'card' in e && e.card ? e.card.description : undefined,
-      })),
+    list: () => orchestrator.listAgents(),
     invoke: async (agentId, contextId, text) => {
-      const entry = registry.get(agentId);
-      if (!entry) throw new Error(`Agent not found: ${agentId}`);
-      return entry.handler.chat(contextId, text);
+      const result = await orchestrator.invoke(agentId, contextId, text);
+      return { text: result.text };
     },
   };
 
@@ -156,10 +153,19 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
   }));
 
   // A2A Gateway
+  const defaultEntry = registry.getDefault();
+  if (!defaultEntry || !defaultEntry.card) {
+    throw new Error('Cannot create gateway: no default agent with card');
+  }
   const taskStore = config.stores?.taskStore
     ? (config.stores.taskStore as import('@nanoswarm/a2a').TaskStore)
     : undefined;
-  app.use(createGateway({ registry, taskStore }));
+  app.use(createGateway({
+    card: defaultEntry.card,
+    invokeAgent: (agentId, contextId, text, history) =>
+      orchestrator.invoke(agentId, contextId, text, history),
+    taskStore,
+  }));
 
   // Channel layer (optional — only when config.channels is present)
   let bus: MessageBus | undefined;

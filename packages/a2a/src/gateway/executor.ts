@@ -9,15 +9,10 @@ import type {
   RequestContext,
   ExecutionEventBus,
 } from '@a2a-js/sdk/server';
-import type { AgentRegistry } from '../registry.ts';
-import { A2ARouter } from '../router.ts';
+import type { InvokeAgentFn } from '../types.ts';
 
 export class GatewayExecutor implements AgentExecutor {
-  private router: A2ARouter;
-
-  constructor(private registry: AgentRegistry) {
-    this.router = new A2ARouter(registry);
-  }
+  constructor(private invokeAgent: InvokeAgentFn) {}
 
   async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     const { userMessage, taskId, contextId, task: existingTask } = requestContext;
@@ -64,14 +59,11 @@ export class GatewayExecutor implements AgentExecutor {
       // 3. Convert A2A history to agent format
       const history = this.convertHistory(existingTask);
 
-      // 4. Resolve handler via router (supports agentId routing)
+      // 4. Invoke agent via unified invoke function
       const agentId = this.extractAgentId(userMessage);
-      const handler = this.router.resolve(agentId);
+      const result = await this.invokeAgent(agentId, contextId, text, history);
 
-      // 5. Call agent handler
-      const result = await handler.chat(contextId, text, history);
-
-      // 6. Publish artifact
+      // 5. Publish artifact
       const artifactUpdate: TaskArtifactUpdateEvent = {
         kind: 'artifact-update',
         taskId,
@@ -85,7 +77,7 @@ export class GatewayExecutor implements AgentExecutor {
       };
       eventBus.publish(artifactUpdate);
 
-      // 7. Publish completed status
+      // 6. Publish completed status
       const completedUpdate: TaskStatusUpdateEvent = {
         kind: 'status-update',
         taskId,

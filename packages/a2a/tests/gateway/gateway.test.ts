@@ -2,7 +2,7 @@ import { describe, it, expect, mock, afterEach } from 'bun:test';
 import express from 'express';
 import type { Server } from 'node:http';
 import { createGateway } from '../../src/gateway/gateway.ts';
-import { AgentRegistry } from '../../src/registry.ts';
+import type { InvokeAgentFn } from '../../src/types.ts';
 import type { AgentCard } from '@a2a-js/sdk';
 
 function createMockCard(): AgentCard {
@@ -19,16 +19,8 @@ function createMockCard(): AgentCard {
   };
 }
 
-function createRegistryWithAgent(): AgentRegistry {
-  const registry = new AgentRegistry();
-  registry.register({
-    id: 'default',
-    card: createMockCard(),
-    handler: {
-      chat: mock(async () => ({ text: 'Hello from gateway agent' })),
-    },
-  });
-  return registry;
+function createMockInvokeAgent(): InvokeAgentFn {
+  return mock(async () => ({ text: 'Hello from gateway agent' })) as InvokeAgentFn;
 }
 
 function listenOnRandomPort(app: express.Express): Promise<{ server: Server; port: number }> {
@@ -51,15 +43,11 @@ describe('createGateway', () => {
     }
   });
 
-  it('should throw when no default agent registered', () => {
-    const registry = new AgentRegistry();
-    expect(() => createGateway({ registry })).toThrow('no default agent registered');
-  });
-
   it('should serve agent card at /.well-known/agent-card.json', async () => {
-    const registry = createRegistryWithAgent();
+    const card = createMockCard();
+    const invokeAgent = createMockInvokeAgent();
     const app = express();
-    app.use(createGateway({ registry }));
+    app.use(createGateway({ card, invokeAgent }));
 
     const result = await listenOnRandomPort(app);
     server = result.server;
@@ -67,16 +55,17 @@ describe('createGateway', () => {
     const response = await fetch(`http://127.0.0.1:${result.port}/.well-known/agent-card.json`);
     expect(response.status).toBe(200);
 
-    const card = await response.json();
-    expect(card.name).toBe('TestAgent');
-    expect(card.protocolVersion).toBe('0.3.0');
-    expect(card.capabilities).toBeDefined();
+    const body = await response.json();
+    expect(body.name).toBe('TestAgent');
+    expect(body.protocolVersion).toBe('0.3.0');
+    expect(body.capabilities).toBeDefined();
   });
 
   it('should handle JSON-RPC at /a2a/jsonrpc', async () => {
-    const registry = createRegistryWithAgent();
+    const card = createMockCard();
+    const invokeAgent = createMockInvokeAgent();
     const app = express();
-    app.use(createGateway({ registry }));
+    app.use(createGateway({ card, invokeAgent }));
 
     const result = await listenOnRandomPort(app);
     server = result.server;

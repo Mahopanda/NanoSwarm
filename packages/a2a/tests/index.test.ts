@@ -2,7 +2,6 @@ import { describe, it, expect } from 'bun:test';
 import {
   AgentRegistry,
   buildInternalCard,
-  A2ARouter,
   GatewayExecutor,
   createGateway,
   filterToExternalCard,
@@ -10,6 +9,7 @@ import {
 import type {
   InternalAgentEntry,
   ExternalCardConfig,
+  InvokeAgentFn,
   AgentHandler,
   AgentCard,
   AgentSkill,
@@ -23,10 +23,6 @@ describe('a2a barrel export', () => {
 
   it('should export buildInternalCard', () => {
     expect(buildInternalCard).toBeInstanceOf(Function);
-  });
-
-  it('should export A2ARouter', () => {
-    expect(A2ARouter).toBeDefined();
   });
 
   it('should export GatewayExecutor', () => {
@@ -44,6 +40,7 @@ describe('a2a barrel export', () => {
   it('should export types (compile-time check)', () => {
     const _handler: AgentHandler = { chat: async () => ({ text: '' }) };
     const _config: ExternalCardConfig = { baseUrl: 'http://example.com' };
+    const _invoke: InvokeAgentFn = async () => ({ text: '' });
 
     expect(true).toBe(true);
   });

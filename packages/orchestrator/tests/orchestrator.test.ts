@@ -3,10 +3,11 @@ import { Orchestrator } from '../src/orchestrator.ts';
 import type { AgentHandle } from '../src/types.ts';
 import type { NormalizedMessage } from '@nanoswarm/channels';
 
-function createMockAgent(id = 'default', name = 'Default Agent'): AgentHandle {
+function createMockAgent(id = 'default', name = 'Default Agent', description?: string): AgentHandle {
   return {
     id,
     name,
+    ...(description ? { description } : {}),
     handle: mock(async (_contextId: string, text: string) => ({
       text: `Response to: ${text}`,
     })),
@@ -50,6 +51,103 @@ describe('Orchestrator', () => {
       orchestrator.registerAgent(agent2, { default: true });
 
       expect(orchestrator.getDefaultAgent()).toBe(agent2);
+    });
+  });
+
+  describe('invoke', () => {
+    it('should invoke default agent when agentId is undefined', async () => {
+      const orchestrator = new Orchestrator();
+      const agent = createMockAgent();
+      orchestrator.registerAgent(agent);
+
+      const result = await orchestrator.invoke(undefined, 'conv-1', 'Hello!');
+
+      expect(result.text).toBe('Response to: Hello!');
+      expect(result.metadata?.agentId).toBe('default');
+      expect(agent.handle).toHaveBeenCalledWith('conv-1', 'Hello!', undefined, undefined);
+    });
+
+    it('should invoke specific agent by id', async () => {
+      const orchestrator = new Orchestrator();
+      const agent1 = createMockAgent('coder', 'Coder');
+      const agent2 = createMockAgent('writer', 'Writer');
+      orchestrator.registerAgent(agent1);
+      orchestrator.registerAgent(agent2);
+
+      const result = await orchestrator.invoke('writer', 'conv-1', 'Hello');
+
+      expect(result.text).toBe('Response to: Hello');
+      expect(result.metadata?.agentId).toBe('writer');
+      expect(agent2.handle).toHaveBeenCalled();
+      expect(agent1.handle).not.toHaveBeenCalled();
+    });
+
+    it('should throw when agentId not found', async () => {
+      const orchestrator = new Orchestrator();
+      orchestrator.registerAgent(createMockAgent());
+
+      await expect(orchestrator.invoke('ghost', 'conv-1', 'Hello')).rejects.toThrow(
+        'Agent not found: ghost',
+      );
+    });
+
+    it('should throw when no agent registered', async () => {
+      const orchestrator = new Orchestrator();
+
+      await expect(orchestrator.invoke(undefined, 'conv-1', 'Hello')).rejects.toThrow(
+        'No agent registered',
+      );
+    });
+
+    it('should pass history and opts to agent', async () => {
+      const orchestrator = new Orchestrator();
+      const agent = createMockAgent();
+      orchestrator.registerAgent(agent);
+
+      const history = [{ role: 'user' as const, content: 'Hi' }];
+      await orchestrator.invoke(undefined, 'conv-1', 'Hello', history, {
+        channel: 'telegram',
+        chatId: 'chat-1',
+      });
+
+      expect(agent.handle).toHaveBeenCalledWith('conv-1', 'Hello', history, {
+        channel: 'telegram',
+        chatId: 'chat-1',
+      });
+    });
+
+    it('should create task and mark completed on success', async () => {
+      const orchestrator = new Orchestrator();
+      orchestrator.registerAgent(createMockAgent());
+
+      await orchestrator.invoke(undefined, 'conv-1', 'Hello');
+
+      const tasks = orchestrator.getTaskManager().listByContext('conv-1');
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].state).toBe('completed');
+      expect(tasks[0].agentId).toBe('default');
+    });
+
+    it('should mark task as failed when agent throws', async () => {
+      const orchestrator = new Orchestrator();
+      const agent: AgentHandle = {
+        id: 'failing',
+        name: 'Failing Agent',
+        handle: mock(async () => {
+          throw new Error('Oops');
+        }),
+      };
+      orchestrator.registerAgent(agent);
+
+      try {
+        await orchestrator.invoke(undefined, 'conv-1', 'Hello');
+      } catch {
+        // expected
+      }
+
+      const tasks = orchestrator.getTaskManager().listByContext('conv-1');
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].state).toBe('failed');
     });
   });
 
@@ -214,6 +312,18 @@ describe('Orchestrator', () => {
       const list = orchestrator.listAgents();
       expect(list).toEqual([
         { id: 'coder', name: 'Coder' },
+        { id: 'writer', name: 'Writer' },
+      ]);
+    });
+
+    it('should include description when present', () => {
+      const orchestrator = new Orchestrator();
+      orchestrator.registerAgent(createMockAgent('coder', 'Coder', 'A coding agent'));
+      orchestrator.registerAgent(createMockAgent('writer', 'Writer'));
+
+      const list = orchestrator.listAgents();
+      expect(list).toEqual([
+        { id: 'coder', name: 'Coder', description: 'A coding agent' },
         { id: 'writer', name: 'Writer' },
       ]);
     });

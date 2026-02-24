@@ -1,3 +1,5 @@
+export type ChatHistory = Array<{ role: 'user' | 'assistant'; content: string }>;
+
 export interface AgentResult {
   text: string;
   metadata?: Record<string, unknown>;
@@ -6,10 +8,11 @@ export interface AgentResult {
 export interface AgentHandle {
   id: string;
   name: string;
+  description?: string;
   handle(
     contextId: string,
     text: string,
-    history?: Array<{ role: 'user' | 'assistant'; content: string }>,
+    history?: ChatHistory,
     opts?: { channel?: string; chatId?: string },
   ): Promise<AgentResult>;
 }
