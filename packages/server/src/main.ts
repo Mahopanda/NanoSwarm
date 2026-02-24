@@ -185,6 +185,7 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
   // REST Channel (with listAgents + dynamic register/unregister)
   app.use('/api', createRestRouter({
     handler: orchestrator,
+    adminApiKey: config.adminApiKey,
     listAgents: () => registry.list().map(e => ({ id: e.id, name: e.name, description: e.description })),
     onRegisterAgent: async ({ id, name: agentName, url, description }) => {
       if (registry.has(id)) {

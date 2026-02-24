@@ -30,6 +30,7 @@ export interface ServerConfig {
   version?: string;     // default: '0.1.0'
   port?: number;        // default: 4000
   host?: string;        // default: 'localhost'
+  adminApiKey?: string;
   model: LanguageModel;
   workspace: string;
   stores?: Stores;

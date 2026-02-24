@@ -1,16 +1,30 @@
-import { Router, json } from 'express';
+import { Router, json, type Request, type Response, type NextFunction } from 'express';
 import type { MessageHandler, NormalizedMessage } from './types.ts';
 
 export interface RestRouterOptions {
   handler: MessageHandler;
+  adminApiKey?: string;
   listAgents?: () => Array<{ id: string; name: string; description?: string }>;
   onRegisterAgent?: (body: { id: string; name: string; url: string; description?: string }) => Promise<void>;
   onUnregisterAgent?: (id: string) => Promise<boolean>;
 }
 
+function requireApiKey(apiKey: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const auth = req.headers.authorization;
+    if (!auth || auth !== `Bearer ${apiKey}`) {
+      res.status(401).json({ error: 'Unauthorized: invalid or missing API key' });
+      return;
+    }
+    next();
+  };
+}
+
 export function createRestRouter(options: RestRouterOptions): Router {
   const router = Router();
   router.use(json());
+
+  const adminGuard = options.adminApiKey ? requireApiKey(options.adminApiKey) : undefined;
 
   router.post('/chat', async (req, res) => {
     const { message, userId, conversationId, agentId } = req.body as {
@@ -54,7 +68,7 @@ export function createRestRouter(options: RestRouterOptions): Router {
   }
 
   if (options.onRegisterAgent) {
-    router.post('/agents/register', async (req, res) => {
+    const registerHandler = async (req: Request, res: Response) => {
       const { id, name, url, description } = req.body as {
         id?: string;
         name?: string;
@@ -71,18 +85,30 @@ export function createRestRouter(options: RestRouterOptions): Router {
       } catch (error) {
         res.status(500).json({ error: error instanceof Error ? error.message : 'Registration failed' });
       }
-    });
+    };
+
+    if (adminGuard) {
+      router.post('/agents/register', adminGuard, registerHandler);
+    } else {
+      router.post('/agents/register', registerHandler);
+    }
   }
 
   if (options.onUnregisterAgent) {
-    router.delete('/agents/:id', async (req, res) => {
+    const deleteHandler = async (req: Request, res: Response) => {
       const removed = await options.onUnregisterAgent!(req.params.id);
       if (!removed) {
         res.status(404).json({ error: `Agent not found: ${req.params.id}` });
         return;
       }
       res.json({ ok: true });
-    });
+    };
+
+    if (adminGuard) {
+      router.delete('/agents/:id', adminGuard, deleteHandler);
+    } else {
+      router.delete('/agents/:id', deleteHandler);
+    }
   }
 
   return router;

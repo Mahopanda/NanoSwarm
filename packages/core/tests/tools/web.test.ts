@@ -146,4 +146,66 @@ describe('web_fetch', () => {
     const result = await tool.execute({ url: 'https://example.com/404' }, context);
     expect(result).toContain('Error: HTTP 404');
   });
+
+  it('should follow safe redirects to external URL', async () => {
+    let callCount = 0;
+    globalThis.fetch = (async (url: string, opts?: any) => {
+      callCount++;
+      if (callCount === 1) {
+        return new Response('', {
+          status: 302,
+          headers: { Location: 'https://example.com/final' },
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as any;
+
+    const tool = createWebFetchTool();
+    const result = await tool.execute({ url: 'https://example.com/start' }, context);
+    const parsed = JSON.parse(result);
+    expect(parsed.status).toBe(200);
+    expect(callCount).toBe(2);
+  });
+
+  it('should block redirect to loopback address (SSRF)', async () => {
+    globalThis.fetch = (async () =>
+      new Response('', {
+        status: 302,
+        headers: { Location: 'http://127.0.0.1/secret' },
+      })) as any;
+
+    const tool = createWebFetchTool();
+    const result = await tool.execute({ url: 'https://example.com/redir' }, context);
+    expect(result).toContain('SSRF blocked redirect');
+  });
+
+  it('should block redirect to cloud metadata endpoint (SSRF)', async () => {
+    globalThis.fetch = (async () =>
+      new Response('', {
+        status: 302,
+        headers: { Location: 'http://169.254.169.254/latest/meta-data/' },
+      })) as any;
+
+    const tool = createWebFetchTool();
+    const result = await tool.execute({ url: 'https://example.com/redir' }, context);
+    expect(result).toContain('SSRF blocked redirect');
+  });
+
+  it('should error on too many redirects', async () => {
+    let callCount = 0;
+    globalThis.fetch = (async () => {
+      callCount++;
+      return new Response('', {
+        status: 302,
+        headers: { Location: `https://example.com/hop${callCount}` },
+      });
+    }) as any;
+
+    const tool = createWebFetchTool();
+    const result = await tool.execute({ url: 'https://example.com/loop' }, context);
+    expect(result).toContain('Too many redirects');
+  });
 });

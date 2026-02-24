@@ -27,6 +27,7 @@ export interface NanoSwarmConfig {
     port?: number;
     host?: string;
     name?: string;
+    adminApiKey?: string;
   };
   externalAgents?: ExternalAgentRef[];
   channels?: {
