@@ -26,7 +26,11 @@ export function extractTextFromResult(result: Message | Task): string {
   if (result.kind === 'message') {
     return extractTextFromParts(result.parts);
   }
-  // Task — try status message first, then last history entry
+  // Task — try artifacts first (most specific data), then status message, then history
+  if (result.artifacts && result.artifacts.length > 0) {
+    const texts = result.artifacts.map(a => extractTextFromParts(a.parts)).filter(Boolean);
+    if (texts.length > 0) return texts.join('\n');
+  }
   if (result.status?.message) {
     return extractTextFromParts(result.status.message.parts);
   }
