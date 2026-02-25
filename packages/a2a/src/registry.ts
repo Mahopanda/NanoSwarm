@@ -1,6 +1,6 @@
 import type { AgentCard, AgentSkill } from '@a2a-js/sdk';
 import type { LoadedSkill } from '@nanoswarm/core';
-import type { InternalAgentEntry, AgentHandler } from './types.ts';
+import type { AgentEntry } from './types.ts';
 
 export interface AgentCardConfig {
   name: string;
@@ -10,30 +10,38 @@ export interface AgentCardConfig {
 }
 
 export class AgentRegistry {
-  private agents = new Map<string, InternalAgentEntry>();
+  private agents = new Map<string, AgentEntry>();
   private defaultId: string | null = null;
 
-  register(entry: InternalAgentEntry, opts?: { default?: boolean }): void {
+  register(entry: AgentEntry, opts?: { default?: boolean }): void {
     this.agents.set(entry.id, entry);
     if (opts?.default || this.agents.size === 1) {
       this.defaultId = entry.id;
     }
   }
 
-  get(id: string): InternalAgentEntry | undefined {
+  get(id: string): AgentEntry | undefined {
     return this.agents.get(id);
   }
 
-  getDefault(): InternalAgentEntry | undefined {
+  getDefault(): AgentEntry | undefined {
     return this.defaultId ? this.agents.get(this.defaultId) : undefined;
   }
 
-  list(): InternalAgentEntry[] {
+  list(): AgentEntry[] {
     return [...this.agents.values()];
   }
 
   has(id: string): boolean {
     return this.agents.has(id);
+  }
+
+  unregister(id: string): boolean {
+    const existed = this.agents.delete(id);
+    if (this.defaultId === id) {
+      this.defaultId = this.agents.size > 0 ? this.agents.keys().next().value! : null;
+    }
+    return existed;
   }
 }
 

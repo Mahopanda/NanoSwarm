@@ -122,6 +122,43 @@ function htmlToText(html: string, url: string): { text: string; extractor: strin
   return { text, extractor: 'fallback' };
 }
 
+const MAX_REDIRECTS = 5;
+const FETCH_HEADERS = {
+  'User-Agent': 'NanoSwarm/0.1',
+  Accept: 'text/html,application/json,text/plain,*/*',
+};
+
+async function followSafeRedirects(url: string): Promise<Response> {
+  let current = url;
+  for (let i = 0; i < MAX_REDIRECTS; i++) {
+    const response = await fetch(current, {
+      headers: FETCH_HEADERS,
+      redirect: 'manual',
+    });
+
+    const status = response.status;
+    if (status < 300 || status >= 400) {
+      return response;
+    }
+
+    const location = response.headers.get('location');
+    if (!location) {
+      return response;
+    }
+
+    // Resolve relative redirects
+    const next = new URL(location, current).toString();
+
+    const ssrfError = checkSsrf(next);
+    if (ssrfError) {
+      throw new Error(`SSRF blocked redirect to ${next}: ${ssrfError}`);
+    }
+
+    current = next;
+  }
+  throw new Error('Too many redirects');
+}
+
 export function createWebFetchTool(options: WebFetchOptions = {}): NanoTool {
   const defaultMaxChars = options.maxChars ?? 50000;
 
@@ -155,13 +192,7 @@ export function createWebFetchTool(options: WebFetchOptions = {}): NanoTool {
 
       let response: Response;
       try {
-        response = await fetch(params.url, {
-          headers: {
-            'User-Agent': 'NanoSwarm/0.1',
-            Accept: 'text/html,application/json,text/plain,*/*',
-          },
-          redirect: 'follow',
-        });
+        response = await followSafeRedirects(params.url);
       } catch (err: any) {
         return `Error: Failed to fetch ${params.url}: ${err.message}`;
       }

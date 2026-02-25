@@ -14,8 +14,10 @@ export async function runGateway(): Promise<void> {
     name: config.server?.name ?? 'NanoSwarm',
     port: config.server?.port ?? (Number(process.env.PORT) || 4000),
     host: config.server?.host ?? 'localhost',
+    adminApiKey: config.server?.adminApiKey,
     model,
     workspace,
+    externalAgents: config.externalAgents,
     channels: config.channels,
   });
 

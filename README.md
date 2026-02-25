@@ -13,6 +13,9 @@ Built with [Bun](https://bun.sh) and the [Vercel AI SDK](https://sdk.vercel.ai).
 - MCP server integration
 - Channel support (CLI, Telegram, REST)
 - Bootstrap Files personality system (SOUL.md, AGENTS.md, USER.md, TOOLS.md)
+- A2A external agent federation with per-agent endpoints
+- Dynamic agent registration API with admin API key authentication
+- SSRF protection for web_fetch (private IP blocking + safe redirect following)
 - Docker deployment ready
 
 ## Supported LLM Providers
@@ -59,12 +62,24 @@ Create `~/.nanoswarm/config.json`:
   "server": {
     "port": 4000,
     "host": "0.0.0.0",
-    "name": "NanoSwarm"
-  }
+    "name": "NanoSwarm",
+    "adminApiKey": "${ADMIN_API_KEY}"
+  },
+  "externalAgents": [
+    {
+      "id": "my-agent",
+      "name": "My External Agent",
+      "url": "http://localhost:5000/.well-known/agent-card.json"
+    }
+  ]
 }
 ```
 
 > `workspace` uses `~` which expands to the user's home directory. This works both locally and inside Docker containers.
+>
+> `adminApiKey` supports `${ENV_VAR}` interpolation. When set, `POST /api/agents/register` and `DELETE /api/agents/:id` require `Authorization: Bearer <key>`.
+>
+> `externalAgents` registers remote A2A agents at startup. Each agent gets a per-agent endpoint at `/a2a/agents/:id/jsonrpc`.
 
 ### Initialize workspace
 
@@ -108,6 +123,43 @@ Config is mounted from `~/.nanoswarm` on the host (override with `NANOSWARM_HOME
 - **gateway** — A2A HTTP server (always running)
 - **cli** — One-off CLI commands (e.g. `docker compose run --rm cli status`)
 
+## Demo: A2A Cross-Framework Shopping
+
+A `docker compose` demo where a NanoSwarm shopping assistant queries two mock seller agents (CrewAI + LangGraph) over A2A protocol.
+
+```mermaid
+graph LR
+  User((User))
+  GW["gateway :4000<br/>NanoSwarm"]
+  SA["seller-a :4001<br/>CrewAI mock"]
+  SB["seller-b :4002<br/>LangGraph mock"]
+
+  User -->|POST /api/chat| GW
+  GW -->|A2A| SA
+  GW -->|A2A| SB
+```
+
+```bash
+# Set up API key
+cp demo/.env.example demo/.env   # edit and add GEMINI_API_KEY
+
+# Start all 3 services
+make demo-up
+
+# Try a query
+curl -X POST http://localhost:4000/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Find me wireless headphones under $300"}'
+
+# Run E2E tests (services must be running)
+make demo-test
+
+# Stop
+make demo-down
+```
+
+See [`demo/README.md`](demo/README.md) for full architecture and verification steps.
+
 ## Testing
 
 ```bash
@@ -118,7 +170,7 @@ bun test
 GEMINI_API_KEY=your_key bun test packages/server/tests/live.test.ts
 ```
 
-- Unit tests: 411 tests across 54 files, no external dependencies
+- Unit tests: 464 tests across 57 files, no external dependencies
 - Live tests: 15 tests covering file ops, shell exec, multi-turn conversation, memory consolidation, cron, subagent spawning, SOUL.md personality, and error recovery. Gated by `GEMINI_API_KEY` — `bun test` alone will never trigger them.
 
 

@@ -1,4 +1,6 @@
+import express from 'express';
 import type {
+  AgentCard,
   Task,
   TaskStatusUpdateEvent,
   TaskArtifactUpdateEvent,
@@ -9,18 +11,36 @@ import type {
   RequestContext,
   ExecutionEventBus,
 } from '@a2a-js/sdk/server';
-import type { InvokeAgentFn } from '../types.ts';
+import {
+  InMemoryTaskStore,
+  DefaultRequestHandler,
+} from '@a2a-js/sdk/server';
+import {
+  agentCardHandler,
+  jsonRpcHandler,
+  UserBuilder,
+} from '@a2a-js/sdk/server/express';
+import { AGENT_CARD_PATH } from '@a2a-js/sdk';
 
-export class GatewayExecutor implements AgentExecutor {
-  constructor(private invokeAgent: InvokeAgentFn) {}
+export interface Product {
+  name: string;
+  price: number;
+  currency: string;
+  rating: number;
+  description: string;
+}
+
+export type SearchHandler = (query: string) => Product[];
+
+class MockExecutor implements AgentExecutor {
+  constructor(private searchHandler: SearchHandler) {}
 
   async execute(requestContext: RequestContext, eventBus: ExecutionEventBus): Promise<void> {
     const { userMessage, taskId, contextId, task: existingTask } = requestContext;
-
-    const text = this.extractText(userMessage);
+    const query = this.extractText(userMessage);
 
     try {
-      // 1. Publish initial Task event if new task
+      // Publish initial Task if new
       if (!existingTask) {
         const initialTask: Task = {
           kind: 'task',
@@ -35,7 +55,7 @@ export class GatewayExecutor implements AgentExecutor {
         eventBus.publish(initialTask);
       }
 
-      // 2. Publish working status
+      // Working status
       const workingUpdate: TaskStatusUpdateEvent = {
         kind: 'status-update',
         taskId,
@@ -46,7 +66,7 @@ export class GatewayExecutor implements AgentExecutor {
             kind: 'message',
             role: 'agent',
             messageId: crypto.randomUUID(),
-            parts: [{ kind: 'text', text: 'Processing...' }],
+            parts: [{ kind: 'text', text: 'Searching products...' }],
             taskId,
             contextId,
           },
@@ -56,28 +76,27 @@ export class GatewayExecutor implements AgentExecutor {
       };
       eventBus.publish(workingUpdate);
 
-      // 3. Convert A2A history to agent format
-      const history = this.convertHistory(existingTask);
+      // Search
+      const results = this.searchHandler(query);
+      const responseText = results.length > 0
+        ? JSON.stringify(results, null, 2)
+        : JSON.stringify({ message: 'No products found matching your query.' });
 
-      // 4. Invoke agent via unified invoke function
-      const agentId = this.extractAgentId(userMessage);
-      const result = await this.invokeAgent(agentId, contextId, text, history);
-
-      // 5. Publish artifact
+      // Artifact
       const artifactUpdate: TaskArtifactUpdateEvent = {
         kind: 'artifact-update',
         taskId,
         contextId,
         artifact: {
           artifactId: crypto.randomUUID(),
-          name: 'response',
-          parts: [{ kind: 'text', text: result.text }],
+          name: 'search-results',
+          parts: [{ kind: 'text', text: responseText }],
         },
         lastChunk: true,
       };
       eventBus.publish(artifactUpdate);
 
-      // 6. Publish completed status
+      // Completed
       const completedUpdate: TaskStatusUpdateEvent = {
         kind: 'status-update',
         taskId,
@@ -129,10 +148,6 @@ export class GatewayExecutor implements AgentExecutor {
     eventBus.publish(canceledUpdate);
   }
 
-  private extractAgentId(message: Message): string | undefined {
-    return (message as any).metadata?.agentId as string | undefined;
-  }
-
   private extractText(message: Message): string {
     for (const part of message.parts) {
       if (part.kind === 'text') {
@@ -141,15 +156,43 @@ export class GatewayExecutor implements AgentExecutor {
     }
     return '';
   }
+}
 
-  private convertHistory(
-    task: Task | undefined,
-  ): Array<{ role: 'user' | 'assistant'; content: string }> | undefined {
-    if (!task?.history || task.history.length === 0) return undefined;
+export interface MockServerOptions {
+  card: AgentCard;
+  searchHandler: SearchHandler;
+  port: number;
+}
 
-    return task.history.map((msg) => ({
-      role: msg.role === 'user' ? 'user' as const : 'assistant' as const,
-      content: this.extractText(msg),
-    }));
-  }
+export function startMockServer(options: MockServerOptions): void {
+  const { card, searchHandler, port } = options;
+
+  const taskStore = new InMemoryTaskStore();
+  const executor = new MockExecutor(searchHandler);
+  const requestHandler = new DefaultRequestHandler(card, taskStore, executor);
+
+  const app = express();
+
+  // Health
+  app.get('/health', (_req, res) => {
+    res.json({ status: 'ok', name: card.name });
+  });
+
+  // Agent Card
+  app.use(
+    `/${AGENT_CARD_PATH}`,
+    agentCardHandler({ agentCardProvider: requestHandler }),
+  );
+
+  // JSON-RPC
+  app.use(
+    '/a2a/jsonrpc',
+    jsonRpcHandler({ requestHandler, userBuilder: UserBuilder.noAuthentication }),
+  );
+
+  app.listen(port, '0.0.0.0', () => {
+    console.log(`[${card.name}] Mock A2A server running on http://0.0.0.0:${port}`);
+    console.log(`[${card.name}] Agent Card: http://0.0.0.0:${port}/.well-known/agent-card.json`);
+    console.log(`[${card.name}] JSON-RPC: http://0.0.0.0:${port}/a2a/jsonrpc`);
+  });
 }

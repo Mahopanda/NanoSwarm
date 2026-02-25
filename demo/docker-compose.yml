@@ -1,0 +1,61 @@
+services:
+  seller-a:
+    build:
+      context: ./sellers
+    command: ["bun", "run", "seller-a.ts"]
+    ports:
+      - "127.0.0.1:4001:4001"
+    environment:
+      - PORT=4001
+      - PUBLIC_URL=http://seller-a:4001
+    networks:
+      - a2a-demo
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4001/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  seller-b:
+    build:
+      context: ./sellers
+    command: ["bun", "run", "seller-b.ts"]
+    ports:
+      - "127.0.0.1:4002:4002"
+    environment:
+      - PORT=4002
+      - PUBLIC_URL=http://seller-b:4002
+    networks:
+      - a2a-demo
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4002/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:4000:4000"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-demo-admin-key}
+      - WORKSPACE=/app/demo-workspace
+    volumes:
+      - ./gateway/nanoswarm.config.json:/home/bun/.nanoswarm/config.json:ro
+      - ./gateway/workspace:/app/demo-workspace:ro
+    depends_on:
+      seller-a:
+        condition: service_healthy
+      seller-b:
+        condition: service_healthy
+    networks:
+      - a2a-demo
+
+networks:
+  a2a-demo:
+    driver: bridge

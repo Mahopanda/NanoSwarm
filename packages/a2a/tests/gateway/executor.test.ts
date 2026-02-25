@@ -1,6 +1,6 @@
 import { describe, it, expect, mock } from 'bun:test';
 import { GatewayExecutor } from '../../src/gateway/executor.ts';
-import { AgentRegistry } from '../../src/registry.ts';
+import type { InvokeAgentFn } from '../../src/types.ts';
 import type {
   Task,
   TaskStatusUpdateEvent,
@@ -8,32 +8,13 @@ import type {
   Message,
 } from '@a2a-js/sdk';
 import type { RequestContext, ExecutionEventBus } from '@a2a-js/sdk/server';
-import type { AgentCard } from '@a2a-js/sdk';
 
-function createMockCard(): AgentCard {
-  return {
-    name: 'Test',
-    description: 'Test',
-    version: '0.1.0',
-    protocolVersion: '0.3.0',
-    url: 'http://localhost:4000/a2a/jsonrpc',
-    capabilities: { streaming: true, pushNotifications: false, stateTransitionHistory: true },
-    skills: [],
-    defaultInputModes: ['text/plain'],
-    defaultOutputModes: ['text/plain'],
-  };
+function createMockInvokeAgent(result = { text: 'Hello from agent' }): InvokeAgentFn {
+  return mock(async () => result) as InvokeAgentFn;
 }
 
-function createRegistryWithHandler(chatResult = { text: 'Hello from agent' }): AgentRegistry {
-  const registry = new AgentRegistry();
-  registry.register({
-    id: 'default',
-    card: createMockCard(),
-    handler: {
-      chat: mock(async () => chatResult),
-    },
-  });
-  return registry;
+function createFailingInvokeAgent(errorMessage: string): InvokeAgentFn {
+  return mock(async () => { throw new Error(errorMessage); }) as InvokeAgentFn;
 }
 
 function createMockEventBus() {
@@ -78,9 +59,9 @@ function createMockRequestContext(opts: {
 describe('GatewayExecutor', () => {
   describe('execute', () => {
     it('should publish Task → working → artifact → completed for new task', async () => {
-      const registry = createRegistryWithHandler();
+      const invokeAgent = createMockInvokeAgent();
       const eventBus = createMockEventBus();
-      const executor = new GatewayExecutor(registry);
+      const executor = new GatewayExecutor(invokeAgent);
       const ctx = createMockRequestContext();
 
       await executor.execute(ctx, eventBus);
@@ -108,9 +89,9 @@ describe('GatewayExecutor', () => {
     });
 
     it('should skip initial Task event for existing task', async () => {
-      const registry = createRegistryWithHandler();
+      const invokeAgent = createMockInvokeAgent();
       const eventBus = createMockEventBus();
-      const executor = new GatewayExecutor(registry);
+      const executor = new GatewayExecutor(invokeAgent);
 
       const existingTask: Task = {
         kind: 'task',
@@ -127,21 +108,20 @@ describe('GatewayExecutor', () => {
     });
 
     it('should extract text from message parts', async () => {
-      const registry = createRegistryWithHandler();
+      const invokeAgent = createMockInvokeAgent();
       const eventBus = createMockEventBus();
-      const executor = new GatewayExecutor(registry);
+      const executor = new GatewayExecutor(invokeAgent);
       const ctx = createMockRequestContext({ text: 'Test message' });
 
       await executor.execute(ctx, eventBus);
 
-      const handler = registry.getDefault()!.handler;
-      expect(handler.chat).toHaveBeenCalledWith('ctx-1', 'Test message', undefined);
+      expect(invokeAgent).toHaveBeenCalledWith(undefined, 'ctx-1', 'Test message', undefined);
     });
 
     it('should convert history from existing task', async () => {
-      const registry = createRegistryWithHandler();
+      const invokeAgent = createMockInvokeAgent();
       const eventBus = createMockEventBus();
-      const executor = new GatewayExecutor(registry);
+      const executor = new GatewayExecutor(invokeAgent);
 
       const existingTask: Task = {
         kind: 'task',
@@ -167,25 +147,16 @@ describe('GatewayExecutor', () => {
       const ctx = createMockRequestContext({ existingTask });
       await executor.execute(ctx, eventBus);
 
-      const handler = registry.getDefault()!.handler;
-      expect(handler.chat).toHaveBeenCalledWith('ctx-1', 'Hello', [
+      expect(invokeAgent).toHaveBeenCalledWith(undefined, 'ctx-1', 'Hello', [
         { role: 'user', content: 'Previous question' },
         { role: 'assistant', content: 'Previous answer' },
       ]);
     });
 
     it('should publish failed status on error', async () => {
-      const registry = new AgentRegistry();
-      registry.register({
-        id: 'default',
-        card: createMockCard(),
-        handler: {
-          chat: mock(async () => { throw new Error('LLM failed'); }),
-        },
-      });
-
+      const invokeAgent = createFailingInvokeAgent('LLM failed');
       const eventBus = createMockEventBus();
-      const executor = new GatewayExecutor(registry);
+      const executor = new GatewayExecutor(invokeAgent);
       const ctx = createMockRequestContext();
 
       await executor.execute(ctx, eventBus);
@@ -200,26 +171,10 @@ describe('GatewayExecutor', () => {
       });
     });
 
-    it('should fail when no default agent in registry', async () => {
-      const registry = new AgentRegistry();
-      const eventBus = createMockEventBus();
-      const executor = new GatewayExecutor(registry);
-      const ctx = createMockRequestContext();
-
-      await executor.execute(ctx, eventBus);
-
-      const lastEvent = eventBus.events[eventBus.events.length - 1] as TaskStatusUpdateEvent;
-      expect(lastEvent.status.state).toBe('failed');
-      expect(lastEvent.status.message?.parts[0]).toEqual({
-        kind: 'text',
-        text: 'No default agent registered',
-      });
-    });
-
     it('should handle empty message parts gracefully', async () => {
-      const registry = createRegistryWithHandler();
+      const invokeAgent = createMockInvokeAgent();
       const eventBus = createMockEventBus();
-      const executor = new GatewayExecutor(registry);
+      const executor = new GatewayExecutor(invokeAgent);
 
       const ctx = {
         userMessage: {
@@ -235,29 +190,15 @@ describe('GatewayExecutor', () => {
 
       await executor.execute(ctx, eventBus);
 
-      const handler = registry.getDefault()!.handler;
-      expect(handler.chat).toHaveBeenCalledWith('ctx-1', '', undefined);
+      expect(invokeAgent).toHaveBeenCalledWith(undefined, 'ctx-1', '', undefined);
     });
   });
 
   describe('agent routing', () => {
     it('should route to specific agent when message has agentId metadata', async () => {
-      const registry = new AgentRegistry();
-      const coderChat = mock(async () => ({ text: 'Coder response' }));
-      const writerChat = mock(async () => ({ text: 'Writer response' }));
-      registry.register({
-        id: 'coder',
-        card: createMockCard(),
-        handler: { chat: coderChat },
-      });
-      registry.register({
-        id: 'writer',
-        card: createMockCard(),
-        handler: { chat: writerChat },
-      });
-
+      const invokeAgent = mock(async (_agentId: string | undefined) => ({ text: 'Routed response' })) as unknown as InvokeAgentFn;
       const eventBus = createMockEventBus();
-      const executor = new GatewayExecutor(registry);
+      const executor = new GatewayExecutor(invokeAgent);
       const message: Message = {
         kind: 'message',
         messageId: 'msg-1',
@@ -276,34 +217,26 @@ describe('GatewayExecutor', () => {
 
       await executor.execute(ctx, eventBus);
 
-      expect(writerChat).toHaveBeenCalled();
-      expect(coderChat).not.toHaveBeenCalled();
+      expect(invokeAgent).toHaveBeenCalledWith('writer', 'ctx-1', 'Hello', undefined);
       const artifact = eventBus.events.find((e: any) => e.kind === 'artifact-update');
-      expect(artifact.artifact.parts[0].text).toBe('Writer response');
+      expect(artifact.artifact.parts[0].text).toBe('Routed response');
     });
 
-    it('should fall back to default when no agentId in metadata', async () => {
-      const registry = new AgentRegistry();
-      const defaultChat = mock(async () => ({ text: 'Default response' }));
-      registry.register({
-        id: 'default',
-        card: createMockCard(),
-        handler: { chat: defaultChat },
-      });
-
+    it('should pass undefined agentId when no metadata', async () => {
+      const invokeAgent = createMockInvokeAgent();
       const eventBus = createMockEventBus();
-      const executor = new GatewayExecutor(registry);
+      const executor = new GatewayExecutor(invokeAgent);
       const ctx = createMockRequestContext();
 
       await executor.execute(ctx, eventBus);
 
-      expect(defaultChat).toHaveBeenCalled();
+      expect(invokeAgent).toHaveBeenCalledWith(undefined, 'ctx-1', 'Hello', undefined);
     });
 
-    it('should publish failed status when agentId does not exist', async () => {
-      const registry = createRegistryWithHandler();
+    it('should publish failed status when invokeAgent throws for unknown agent', async () => {
+      const invokeAgent = createFailingInvokeAgent('Agent not found: ghost');
       const eventBus = createMockEventBus();
-      const executor = new GatewayExecutor(registry);
+      const executor = new GatewayExecutor(invokeAgent);
 
       const message: Message = {
         kind: 'message',
@@ -334,9 +267,9 @@ describe('GatewayExecutor', () => {
 
   describe('cancelTask', () => {
     it('should publish canceled status', async () => {
-      const registry = createRegistryWithHandler();
+      const invokeAgent = createMockInvokeAgent();
       const eventBus = createMockEventBus();
-      const executor = new GatewayExecutor(registry);
+      const executor = new GatewayExecutor(invokeAgent);
 
       await executor.cancelTask('task-1', eventBus);
 

@@ -9,16 +9,32 @@ export interface AgentHandler {
     contextId: string,
     text: string,
     history?: Array<{ role: 'user' | 'assistant'; content: string }>,
+    opts?: { channel?: string; chatId?: string },
   ): Promise<{ text: string }>;
 }
 
-export interface InternalAgentEntry {
+export interface AgentEntry {
   id: string;
-  card: AgentCard;
+  name: string;
+  description?: string;
+  kind: 'internal' | 'external';
+  card?: AgentCard;
+  url?: string;
   handler: AgentHandler;
+}
+
+export function isExternalEntry(entry: AgentEntry): boolean {
+  return entry.kind === 'external';
 }
 
 export interface ExternalCardConfig {
   baseUrl: string;
   skillFilter?: (skill: AgentSkill) => boolean;
 }
+
+export type InvokeAgentFn = (
+  agentId: string | undefined,
+  contextId: string,
+  text: string,
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>,
+) => Promise<{ text: string }>;

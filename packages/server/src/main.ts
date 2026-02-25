@@ -1,6 +1,7 @@
 import express, { type Express } from 'express';
-import { Agent, type AgentConfig } from '@nanoswarm/core';
-import { AgentRegistry, buildInternalCard, createGateway } from '@nanoswarm/a2a';
+import { Agent, type AgentConfig, createInvokeAgentTool, type AgentResolver } from '@nanoswarm/core';
+import { AgentRegistry, buildInternalCard, createGateway, createPerAgentGateway, connectExternalAgent } from '@nanoswarm/a2a';
+import type { AgentEntry } from '@nanoswarm/a2a';
 import {
   createRestRouter,
   MessageBus,
@@ -12,6 +13,7 @@ import {
   type NormalizedMessage,
 } from '@nanoswarm/channels';
 import { Orchestrator } from '@nanoswarm/orchestrator';
+import type { AgentStore, ResolvedAgent } from '@nanoswarm/orchestrator';
 import type { ServerConfig } from './types.ts';
 
 export interface NanoSwarmServer {
@@ -24,6 +26,17 @@ export interface NanoSwarmServer {
   stop: () => Promise<void>;
 }
 
+// Adapter: AgentEntry → ResolvedAgent
+function toResolvedAgent(entry: AgentEntry): ResolvedAgent {
+  return {
+    id: entry.id,
+    name: entry.name,
+    description: entry.description,
+    handle: async (contextId, text, history, opts) =>
+      entry.handler.chat(contextId, text, history, opts),
+  };
+}
+
 export async function createServer(config: ServerConfig): Promise<NanoSwarmServer> {
   const name = config.name ?? 'NanoSwarm';
   const version = config.version ?? '0.1.0';
@@ -31,7 +44,6 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
   const host = config.host ?? 'localhost';
 
   const registry = new AgentRegistry();
-  const orchestrator = new Orchestrator();
   const agents: Agent[] = [];
 
   if (config.agents && config.agents.length > 0) {
@@ -52,17 +64,8 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
         { name: def.name, description: def.description ?? `Agent: ${def.name}`, version, url },
         agent.skills,
       );
-      registry.register({ id: def.id, card, handler: agent }, { default: def.default });
-
-      orchestrator.registerAgent(
-        {
-          id: def.id,
-          name: def.name,
-          handle: async (contextId, text, history, opts) => {
-            const result = await agent.chat(contextId, text, history, opts);
-            return { text: result.text };
-          },
-        },
+      registry.register(
+        { id: def.id, name: def.name, description: def.description, kind: 'internal', card, handler: agent },
         { default: def.default },
       );
     }
@@ -83,16 +86,53 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
       { name, description: config.description ?? 'A NanoSwarm agent', version, url },
       agent.skills,
     );
-    registry.register({ id: 'default', card, handler: agent });
-
-    orchestrator.registerAgent({
+    registry.register({
       id: 'default',
       name,
-      handle: async (contextId, text, history, opts) => {
-        const result = await agent.chat(contextId, text, history, opts);
-        return { text: result.text };
-      },
+      description: config.description ?? 'A NanoSwarm agent',
+      kind: 'internal',
+      card,
+      handler: agent,
     });
+  }
+
+  // External agents (optional)
+  if (config.externalAgents) {
+    for (const ext of config.externalAgents) {
+      const entry = await connectExternalAgent(ext);
+      registry.register(entry);
+
+      if (entry.card) {
+        console.log(`[${name}] External agent "${ext.id}" connected: ${ext.url} (${entry.card.name})`);
+      } else {
+        console.warn(`[${name}] External agent "${ext.id}" registered but card unavailable: ${ext.url}`);
+      }
+    }
+  }
+
+  // Adapter: AgentRegistry → AgentStore
+  const agentStore: AgentStore = {
+    get: (id) => { const e = registry.get(id); return e ? toResolvedAgent(e) : undefined; },
+    getDefault: () => { const e = registry.getDefault(); return e ? toResolvedAgent(e) : undefined; },
+    list: () => registry.list().map(e => ({ id: e.id, name: e.name, description: e.description })),
+    has: (id) => registry.has(id),
+  };
+
+  const orchestrator = new Orchestrator(agentStore);
+
+  // AgentResolver — lets any agent invoke other agents via invoke_agent tool
+  const agentResolver: AgentResolver = {
+    list: () => registry.list().map(e => ({ id: e.id, name: e.name, description: e.description })),
+    invoke: async (agentId, contextId, text) => {
+      const result = await orchestrator.invoke(agentId, contextId, text);
+      return { text: result.text };
+    },
+  };
+
+  // Register invoke_agent tool on all internal agents
+  const invokeAgentTool = createInvokeAgentTool(agentResolver);
+  for (const agent of agents) {
+    agent.registry.register(invokeAgentTool);
   }
 
   // Express app
@@ -109,17 +149,59 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
     });
   });
 
-  // REST Channel (with listAgents callback)
-  app.use('/api', createRestRouter({
-    handler: orchestrator,
-    listAgents: () => orchestrator.listAgents(),
-  }));
-
-  // A2A Gateway
+  // A2A Gateway (global — default agent)
+  const defaultEntry = registry.getDefault();
+  if (!defaultEntry || !defaultEntry.card) {
+    throw new Error('Cannot create gateway: no default agent with card');
+  }
   const taskStore = config.stores?.taskStore
     ? (config.stores.taskStore as import('@nanoswarm/a2a').TaskStore)
     : undefined;
-  app.use(createGateway({ registry, taskStore }));
+  app.use(createGateway({
+    card: defaultEntry.card,
+    invokeAgent: (agentId, contextId, text, history) =>
+      orchestrator.invoke(agentId, contextId, text, history),
+    taskStore,
+  }));
+
+  // Per-Agent A2A Gateway
+  const getAgentCard = (agentId: string) => {
+    const entry = registry.get(agentId);
+    if (!entry?.card) return undefined;
+    return {
+      ...entry.card,
+      url: `http://${host}:${port}/a2a/agents/${agentId}/jsonrpc`,
+    };
+  };
+
+  const perAgentGW = createPerAgentGateway({
+    getCard: getAgentCard,
+    invokeAgent: (agentId, contextId, text, history) =>
+      orchestrator.invoke(agentId, contextId, text, history),
+    taskStore,
+  });
+  app.use('/a2a', perAgentGW.router);
+
+  // REST Channel (with listAgents + dynamic register/unregister)
+  app.use('/api', createRestRouter({
+    handler: orchestrator,
+    adminApiKey: config.adminApiKey,
+    listAgents: () => registry.list().map(e => ({ id: e.id, name: e.name, description: e.description })),
+    onRegisterAgent: async ({ id, name: agentName, url, description }) => {
+      if (registry.has(id)) {
+        throw new Error(`Agent already exists: ${id}`);
+      }
+      const entry = await connectExternalAgent({ id, name: agentName, url, description });
+      registry.register(entry);
+    },
+    onUnregisterAgent: async (id) => {
+      const removed = registry.unregister(id);
+      if (removed) {
+        perAgentGW.invalidate(id);
+      }
+      return removed;
+    },
+  }));
 
   // Channel layer (optional — only when config.channels is present)
   let bus: MessageBus | undefined;
@@ -214,6 +296,7 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
           console.log(`[${name}] REST API: http://${host}:${p}/api/chat`);
           console.log(`[${name}] Agent Card: http://${host}:${p}/.well-known/agent-card.json`);
           console.log(`[${name}] JSON-RPC: http://${host}:${p}/a2a/jsonrpc`);
+          console.log(`[${name}] Per-Agent A2A: http://${host}:${p}/a2a/agents/:id/jsonrpc`);
           console.log(`[${name}] Health: http://${host}:${p}/health`);
           resolve();
         });

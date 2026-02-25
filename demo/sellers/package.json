@@ -1,0 +1,13 @@
+{
+  "name": "@nanoswarm/demo-sellers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@a2a-js/sdk": "^0.3.10",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6"
+  }
+}

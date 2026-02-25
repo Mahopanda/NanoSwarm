@@ -10,7 +10,11 @@
       "mcp__ide__getDiagnostics",
       "Bash(docker compose:*)",
       "Bash(curl:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(python3:*)",
+      "Bash(plantuml:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

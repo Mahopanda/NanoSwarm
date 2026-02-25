@@ -1,7 +1,7 @@
 x-common: &common
   build: .
   volumes:
-    - "${NANOSWARM_HOME:-~/.nanoswarm}:/root/.nanoswarm"
+    - "${NANOSWARM_HOME:-~/.nanoswarm}:/home/bun/.nanoswarm"
 
 services:
   gateway:

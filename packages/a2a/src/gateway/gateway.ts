@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { AGENT_CARD_PATH } from '@a2a-js/sdk';
+import type { AgentCard } from '@a2a-js/sdk';
 import {
   InMemoryTaskStore,
   DefaultRequestHandler,
@@ -10,25 +11,21 @@ import {
   jsonRpcHandler,
   UserBuilder,
 } from '@a2a-js/sdk/server/express';
-import type { AgentRegistry } from '../registry.ts';
+import type { InvokeAgentFn } from '../types.ts';
 import { GatewayExecutor } from './executor.ts';
 
 export interface GatewayOptions {
-  registry: AgentRegistry;
+  card: AgentCard;
+  invokeAgent: InvokeAgentFn;
   taskStore?: TaskStore;
 }
 
 export function createGateway(options: GatewayOptions): Router {
-  const { registry } = options;
-
-  const defaultEntry = registry.getDefault();
-  if (!defaultEntry) {
-    throw new Error('Cannot create gateway: no default agent registered');
-  }
+  const { card, invokeAgent } = options;
 
   const taskStore: TaskStore = options.taskStore ?? new InMemoryTaskStore();
-  const executor = new GatewayExecutor(registry);
-  const requestHandler = new DefaultRequestHandler(defaultEntry.card, taskStore, executor);
+  const executor = new GatewayExecutor(invokeAgent);
+  const requestHandler = new DefaultRequestHandler(card, taskStore, executor);
 
   const router = Router();
 

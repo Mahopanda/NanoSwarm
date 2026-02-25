@@ -1,6 +1,6 @@
 import { describe, it, expect, mock } from 'bun:test';
 import { AgentRegistry, buildInternalCard } from '../src/registry.ts';
-import type { InternalAgentEntry, AgentHandler } from '../src/types.ts';
+import type { AgentEntry, AgentHandler } from '../src/types.ts';
 import type { AgentCard } from '@a2a-js/sdk';
 import type { LoadedSkill } from '@nanoswarm/core';
 
@@ -24,9 +24,11 @@ function createMockCard(name = 'TestAgent'): AgentCard {
   };
 }
 
-function createEntry(id = 'default', name = 'TestAgent'): InternalAgentEntry {
+function createEntry(id = 'default', name = 'TestAgent'): AgentEntry {
   return {
     id,
+    name,
+    kind: 'internal',
     card: createMockCard(name),
     handler: createMockHandler(),
   };
@@ -102,6 +104,114 @@ describe('AgentRegistry', () => {
     it('should return false for unregistered agent', () => {
       const registry = new AgentRegistry();
       expect(registry.has('a1')).toBe(false);
+    });
+  });
+
+  describe('unregister', () => {
+    it('should remove an existing agent', () => {
+      const registry = new AgentRegistry();
+      registry.register(createEntry('a1'));
+
+      expect(registry.unregister('a1')).toBe(true);
+      expect(registry.has('a1')).toBe(false);
+      expect(registry.get('a1')).toBeUndefined();
+    });
+
+    it('should return false for non-existent id', () => {
+      const registry = new AgentRegistry();
+      expect(registry.unregister('nonexistent')).toBe(false);
+    });
+
+    it('should reassign default when default agent is removed', () => {
+      const registry = new AgentRegistry();
+      const entry1 = createEntry('a1', 'Agent1');
+      const entry2 = createEntry('a2', 'Agent2');
+      registry.register(entry1);
+      registry.register(entry2);
+
+      // a1 is default (first registered)
+      expect(registry.getDefault()).toBe(entry1);
+
+      registry.unregister('a1');
+      // default should move to next available
+      expect(registry.getDefault()).toBe(entry2);
+    });
+
+    it('should set default to null when last agent is removed', () => {
+      const registry = new AgentRegistry();
+      registry.register(createEntry('a1'));
+
+      registry.unregister('a1');
+      expect(registry.getDefault()).toBeUndefined();
+    });
+
+    it('should not change default when non-default agent is removed', () => {
+      const registry = new AgentRegistry();
+      const entry1 = createEntry('a1', 'Agent1');
+      const entry2 = createEntry('a2', 'Agent2');
+      registry.register(entry1);
+      registry.register(entry2);
+
+      registry.unregister('a2');
+      expect(registry.getDefault()).toBe(entry1);
+    });
+  });
+
+  describe('external agents', () => {
+    function createExternalEntry(id = 'ext-1', name = 'ExternalAgent'): AgentEntry {
+      return {
+        id,
+        name,
+        kind: 'external',
+        url: 'http://localhost:5000',
+        handler: createMockHandler(),
+      };
+    }
+
+    it('should register external agent entry', () => {
+      const registry = new AgentRegistry();
+      const entry = createExternalEntry();
+      registry.register(entry);
+
+      expect(registry.get('ext-1')).toBe(entry);
+      expect(registry.has('ext-1')).toBe(true);
+    });
+
+    it('should list mixed internal and external entries', () => {
+      const registry = new AgentRegistry();
+      registry.register(createEntry('internal-1'));
+      registry.register(createExternalEntry('ext-1'));
+
+      expect(registry.list()).toHaveLength(2);
+    });
+
+    it('should filter internal entries with list + kind', () => {
+      const registry = new AgentRegistry();
+      registry.register(createEntry('internal-1'));
+      registry.register(createExternalEntry('ext-1'));
+      registry.register(createEntry('internal-2'));
+
+      const internal = registry.list().filter(e => e.kind === 'internal');
+      expect(internal).toHaveLength(2);
+      expect(internal.every(e => e.card !== undefined)).toBe(true);
+    });
+
+    it('should filter external entries with list + kind', () => {
+      const registry = new AgentRegistry();
+      registry.register(createEntry('internal-1'));
+      registry.register(createExternalEntry('ext-1'));
+      registry.register(createExternalEntry('ext-2'));
+
+      const external = registry.list().filter(e => e.kind === 'external');
+      expect(external).toHaveLength(2);
+      expect(external.every(e => e.url !== undefined)).toBe(true);
+    });
+
+    it('should return empty when no matching kind', () => {
+      const registry = new AgentRegistry();
+      registry.register(createEntry('internal-1'));
+
+      expect(registry.list().filter(e => e.kind === 'external')).toEqual([]);
     });
   });
 });
