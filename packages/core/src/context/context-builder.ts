@@ -19,11 +19,25 @@ async function tryReadFile(path: string): Promise<string | null> {
 }
 
 export class ContextBuilder {
+  private bootstrapCache: string[] | null = null;
+
   constructor(
     public readonly workspacePath: string,
     private skillLoader: SkillLoader,
     private memoryStore: MemoryStore,
   ) {}
+
+  private async loadBootstrapFiles(): Promise<string[]> {
+    if (this.bootstrapCache !== null) return this.bootstrapCache;
+    const results = await Promise.all(
+      BOOTSTRAP_FILES.map(async (f) => {
+        const content = await tryReadFile(join(this.workspacePath, f));
+        return content ? `## ${f}\n\n${content}` : null;
+      }),
+    );
+    this.bootstrapCache = results.filter((s): s is string => s !== null);
+    return this.bootstrapCache;
+  }
 
   async buildSystemPrompt(contextId: string): Promise<string> {
     const sections: string[] = [];
@@ -31,13 +45,8 @@ export class ContextBuilder {
     // 1. Core identity
     sections.push(this.buildCoreIdentity());
 
-    // 2. Bootstrap files
-    for (const fileName of BOOTSTRAP_FILES) {
-      const content = await tryReadFile(join(this.workspacePath, fileName));
-      if (content) {
-        sections.push(`## ${fileName}\n\n${content}`);
-      }
-    }
+    // 2. Bootstrap files (cached + parallel)
+    sections.push(...await this.loadBootstrapFiles());
 
     // 3. Memory context (capped to prevent system prompt overflow)
     const MAX_MEMORY_CHARS = 8000; // ~2000 tokens

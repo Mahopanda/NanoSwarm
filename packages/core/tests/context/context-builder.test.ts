@@ -117,4 +117,18 @@ describe('ContextBuilder', () => {
     expect(messages).toHaveLength(1);
     expect(messages[0]).toEqual({ role: 'user', content: 'Hello' });
   });
+
+  it('should cache bootstrap files across calls', async () => {
+    await writeFile(join(workspace, 'SOUL.md'), 'Soul content', 'utf-8');
+
+    const prompt1 = await builder.buildSystemPrompt('ctx1');
+    const prompt2 = await builder.buildSystemPrompt('ctx1');
+
+    // Both calls should include bootstrap content
+    expect(prompt1).toContain('## SOUL.md');
+    expect(prompt1).toContain('Soul content');
+    // Cached result should be identical for bootstrap sections
+    expect(prompt2).toContain('## SOUL.md');
+    expect(prompt2).toContain('Soul content');
+  });
 });

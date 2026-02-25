@@ -7,7 +7,7 @@ import { SQLiteHistoryStore } from './sqlite-history-store.ts';
 import { SQLiteTaskStore } from './sqlite-task-store.ts';
 import { SQLiteRegistryStore } from './sqlite-registry-store.ts';
 import { FileMemoryStore } from '../memory/memory-store.ts';
-import { FileHistoryStore } from '../memory/history-store.ts';
+import { JsonlHistoryStore } from '../memory/jsonl-history-store.ts';
 import type { StoreConfig, Stores, RegistryStore } from './types.ts';
 
 export function createStores(config: StoreConfig): Stores {
@@ -36,7 +36,7 @@ export function createStores(config: StoreConfig): Stores {
       };
       return {
         memoryStore: new FileMemoryStore(workspace),
-        historyStore: new FileHistoryStore(workspace),
+        historyStore: new JsonlHistoryStore(workspace),
         taskStore: {
           async save() {},
           async load() { return undefined; },

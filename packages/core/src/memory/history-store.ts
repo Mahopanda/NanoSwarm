@@ -6,6 +6,7 @@ export interface HistoryStore {
   append(contextId: string, userMessage: string, agentResponse: string): Promise<void>;
   getHistory(contextId: string, limit?: number): Promise<HistoryEntry[]>;
   search(contextId: string, query: string): Promise<HistoryEntry[]>;
+  archive?(contextId: string): Promise<void>;
 }
 
 function formatTimestamp(date: Date): string {

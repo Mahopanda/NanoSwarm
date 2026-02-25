@@ -3,7 +3,8 @@ import type { LanguageModel } from 'ai';
 import { EventBus } from '../events/event-bus.ts';
 import { FileMemoryStore } from '../memory/memory-store.ts';
 import type { MemoryStore } from '../memory/memory-store.ts';
-import { FileHistoryStore } from '../memory/history-store.ts';
+import { CachedMemoryStore } from '../memory/cached-memory-store.ts';
+import { JsonlHistoryStore } from '../memory/jsonl-history-store.ts';
 import type { HistoryStore } from '../memory/history-store.ts';
 import type { Stores } from '../store/types.ts';
 import { MemoryConsolidator } from '../memory/consolidator.ts';
@@ -75,8 +76,9 @@ export class Agent {
 
     // 2. Memory & History stores (use injected stores or fallback to file-based)
     this.stores = config.stores ?? null;
-    this.memoryStore = config.stores?.memoryStore ?? new FileMemoryStore(config.workspace);
-    this.historyStore = config.stores?.historyStore ?? new FileHistoryStore(config.workspace);
+    const rawMemoryStore = config.stores?.memoryStore ?? new FileMemoryStore(config.workspace);
+    this.memoryStore = new CachedMemoryStore(rawMemoryStore);
+    this.historyStore = config.stores?.historyStore ?? new JsonlHistoryStore(config.workspace);
 
     // 3. SkillLoader
     this._skillLoader = new SkillLoader();
@@ -317,5 +319,8 @@ export class Agent {
     messages: Array<{ role: string; content: string; timestamp?: string }>,
   ): Promise<void> {
     await this.consolidator.consolidate(contextId, messages, { archiveAll: true });
+    if (this.historyStore.archive) {
+      await this.historyStore.archive(contextId);
+    }
   }
 }
