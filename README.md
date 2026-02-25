@@ -123,6 +123,74 @@ Config is mounted from `~/.nanoswarm` on the host (override with `NANOSWARM_HOME
 - **gateway** — A2A HTTP server (always running)
 - **cli** — One-off CLI commands (e.g. `docker compose run --rm cli status`)
 
+## Telegram Bot
+
+NanoSwarm supports Telegram as a chat channel via [grammY](https://grammy.dev) (long polling).
+
+### Step 1: Create a Telegram Bot
+
+1. Open Telegram and search for [@BotFather](https://t.me/BotFather)
+2. Send `/newbot` and follow the prompts to choose a name and username
+3. BotFather will give you a **bot token** (e.g. `123456:ABC-DEF...`) — save it
+
+### Step 2: Get your Telegram User ID
+
+You need your numeric user ID to restrict who can talk to the bot.
+
+1. Search for [@userinfobot](https://t.me/userinfobot) on Telegram
+2. Send it any message — it will reply with your user ID (a number like `123456789`)
+
+### Step 3: Add Telegram config
+
+Add a `channels.telegram` section to your `~/.nanoswarm/config.json`:
+
+```json
+{
+  "agents": { "..." : "..." },
+  "providers": { "..." : "..." },
+  "server": { "..." : "..." },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "token": "YOUR_BOT_TOKEN",
+      "allowFrom": ["YOUR_USER_ID"],
+      "adminUsers": ["YOUR_USER_ID"]
+    }
+  }
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `enabled` | Yes | Set to `true` to activate the Telegram channel |
+| `token` | Yes | Bot token from BotFather. Supports `${ENV_VAR}` interpolation |
+| `allowFrom` | No | Array of user IDs allowed to chat. Empty `[]` = allow everyone |
+| `adminUsers` | No | Array of user IDs that can use admin commands (`/status`, `/cancel`, `/logs`, `/restart`) |
+| `proxy` | No | HTTPS proxy URL (e.g. `http://proxy:8080`). Also reads `HTTPS_PROXY` env var |
+| `mediaDir` | No | Directory for downloaded media files. Default: `~/.nanoswarm/media` |
+
+> **Tip:** Use `${TELEGRAM_BOT_TOKEN}` in the token field and set the actual value as an environment variable to avoid committing secrets.
+
+### Step 4: Start NanoSwarm
+
+```bash
+bun run dev
+```
+
+Open your bot in Telegram and send a message — the bot should respond.
+
+### Available Commands
+
+| Command | Access | Description |
+|---------|--------|-------------|
+| `/start` | Everyone | Welcome message and command list |
+| `/new` | Everyone | Start a new conversation (clears context) |
+| `/help` | Everyone | Show available commands |
+| `/status` | Admin | System health, uptime, message count, running agents |
+| `/logs [N\|error]` | Admin | View recent logs (default 50, max 200, or `error` for errors only) |
+
+
+
 ## Demo: A2A Cross-Framework Shopping
 
 A `docker compose` demo where a NanoSwarm shopping assistant queries two mock seller agents (CrewAI + LangGraph) over A2A protocol.
