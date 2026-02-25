@@ -214,10 +214,15 @@ export class Agent {
   ): Promise<AgentLoopResult> {
     // Handle /new command
     if (message.trim() === '/new') {
-      if (history && history.length > 0) {
+      const storedHistory = await this.historyStore.getHistory(contextId);
+      const msgs = history ?? storedHistory.map((e) => [
+        { role: 'user' as const, content: e.userMessage },
+        { role: 'assistant' as const, content: e.agentResponse },
+      ]).flat();
+      if (msgs.length > 0) {
         await this.resetSession(
           contextId,
-          history.map((m) => ({ role: m.role, content: m.content })),
+          msgs.map((m) => ({ role: m.role, content: m.content })),
         );
       }
       return {
@@ -229,12 +234,32 @@ export class Agent {
       };
     }
 
+    // Auto-retrieve history from store when not explicitly provided
+    let effectiveHistory = history;
+    if (!effectiveHistory) {
+      const stored = await this.historyStore.getHistory(contextId, 20);
+      if (stored.length > 0) {
+        effectiveHistory = stored.flatMap((e) => [
+          { role: 'user' as const, content: e.userMessage },
+          { role: 'assistant' as const, content: e.agentResponse },
+        ]);
+      }
+    }
+
     this.processingState = { since: Date.now(), sender: opts?.chatId ?? contextId };
     this.lastActivityAt = Date.now();
 
     try {
-      const result = await this.loop.run(contextId, message, history, opts);
+      const result = await this.loop.run(contextId, message, effectiveHistory, opts);
       this.messagesProcessed++;
+
+      // Persist the exchange to history store
+      if (result.text && result.finishReason !== 'error') {
+        await this.historyStore.append(contextId, message, result.text).catch((err) => {
+          console.error('[Agent] Failed to save history:', err);
+        });
+      }
+
       return result;
     } catch (err) {
       this.errorsCount++;

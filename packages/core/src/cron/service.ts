@@ -60,7 +60,7 @@ export class CronService {
     };
 
     this.store.jobs.push(job);
-    this.saveStore().catch(() => {});
+    this.saveStore().catch((err) => console.error('[CronService] Failed to save store:', err));
     this.armTimer();
     return job;
   }
@@ -74,7 +74,7 @@ export class CronService {
     const idx = this.store.jobs.findIndex((j) => j.id === jobId);
     if (idx === -1) return false;
     this.store.jobs.splice(idx, 1);
-    this.saveStore().catch(() => {});
+    this.saveStore().catch((err) => console.error('[CronService] Failed to save store:', err));
     this.armTimer();
     return true;
   }
@@ -87,7 +87,7 @@ export class CronService {
     if (enabled) {
       job.state.nextRunAtMs = this.computeNextRun(job.schedule, Date.now());
     }
-    this.saveStore().catch(() => {});
+    this.saveStore().catch((err) => console.error('[CronService] Failed to save store:', err));
     this.armTimer();
     return job;
   }
@@ -189,6 +189,6 @@ export class CronService {
       job.updatedAtMs = now;
     }
 
-    await this.saveStore().catch(() => {});
+    await this.saveStore().catch((err) => console.error('[CronService] Failed to save store:', err));
   }
 }
