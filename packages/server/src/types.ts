@@ -5,7 +5,6 @@ import type { CLIChannelConfig, TelegramChannelConfig } from '@nanoswarm/channel
 export interface ChannelsConfig {
   cli?: CLIChannelConfig;
   telegram?: TelegramChannelConfig;
-  telegramBots?: TelegramChannelConfig[];
 }
 
 export interface AgentDefinition {

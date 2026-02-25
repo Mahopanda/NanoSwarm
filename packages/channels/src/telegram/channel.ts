@@ -8,6 +8,19 @@ import { downloadTelegramFile, type MediaType } from './media.ts';
 import { createSTTProvider, type STTProvider } from './stt.ts';
 import { GroupFilter, type TelegramGroupConfig } from './group.ts';
 
+/** Config for a sub-bot account bound to a specific agent. */
+export interface TelegramBotAccount {
+  token: string;
+  boundAgent: string;
+  allowFrom?: string[];
+  proxy?: string;
+  replyToMessage?: boolean;
+  sttProvider?: 'groq' | 'whisper';
+  sttApiKey?: string;
+  group?: TelegramGroupConfig;
+  mediaDir?: string;
+}
+
 export interface TelegramChannelConfig extends ChannelConfig {
   token: string;
   proxy?: string;
@@ -17,6 +30,9 @@ export interface TelegramChannelConfig extends ChannelConfig {
   adminUsers?: string[];
   group?: TelegramGroupConfig;
   mediaDir?: string;
+  /** Sub-bot accounts, keyed by bot ID (e.g. "finance", "support"). */
+  accounts?: Record<string, TelegramBotAccount>;
+  // --- internal fields set by server, not from user config ---
   botId?: string;
   boundAgent?: string;
 }

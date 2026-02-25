@@ -230,11 +230,23 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
       channelManager.register(telegramChannel);
     }
 
-    // Sub-bots: each gets its own TelegramChannel with a bound agent
-    if (config.channels.telegramBots) {
-      for (const botConfig of config.channels.telegramBots) {
-        if (!botConfig.enabled) continue;
-        const subBot = new TelegramChannel(botConfig, bus);
+    // Sub-bots: each account under telegram.accounts gets its own TelegramChannel
+    const accounts = config.channels.telegram?.accounts;
+    if (accounts) {
+      for (const [botId, account] of Object.entries(accounts)) {
+        const subBot = new TelegramChannel({
+          enabled: true,
+          token: account.token,
+          botId,
+          boundAgent: account.boundAgent,
+          allowFrom: account.allowFrom,
+          proxy: account.proxy,
+          replyToMessage: account.replyToMessage,
+          sttProvider: account.sttProvider,
+          sttApiKey: account.sttApiKey,
+          group: account.group,
+          mediaDir: account.mediaDir,
+        }, bus);
         channelManager.register(subBot);
       }
     }
