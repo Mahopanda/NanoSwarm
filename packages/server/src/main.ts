@@ -230,11 +230,34 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
       channelManager.register(telegramChannel);
     }
 
+    // Sub-bots: each account under telegram.accounts gets its own TelegramChannel
+    const accounts = config.channels.telegram?.accounts;
+    if (accounts) {
+      for (const [botId, account] of Object.entries(accounts)) {
+        const subBot = new TelegramChannel({
+          enabled: true,
+          token: account.token,
+          botId,
+          boundAgent: account.boundAgent,
+          allowFrom: account.allowFrom,
+          proxy: account.proxy,
+          replyToMessage: account.replyToMessage,
+          sttProvider: account.sttProvider,
+          sttApiKey: account.sttApiKey,
+          group: account.group,
+          mediaDir: account.mediaDir,
+        }, bus);
+        channelManager.register(subBot);
+      }
+    }
+
     // Inbound consumer loop: bus → orchestrator → bus.outbound
     const consumeInbound = async () => {
       while (true) {
         const inMsg: InboundMessage = await bus!.consumeInbound();
         const conversationId = sessionKey(inMsg);
+        const t0 = Date.now();
+        console.log(`[${name}] ← ${inMsg.channel} (${inMsg.senderId}) "${inMsg.content.slice(0, 80)}"`);
 
         const normalized: NormalizedMessage = {
           channelId: inMsg.channel,
@@ -246,15 +269,18 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
 
         try {
           const response = await orchestrator.handle(normalized);
+          const ms = Date.now() - t0;
+          console.log(`[${name}] → ${inMsg.channel} (${ms}ms) "${response.text.slice(0, 80)}"`);
           bus!.publishOutbound({
             channel: inMsg.channel,
             chatId: inMsg.chatId,
             content: response.text,
+            replyTo: inMsg.metadata['messageId'] != null ? String(inMsg.metadata['messageId']) : undefined,
             media: [],
             metadata: response.metadata ?? {},
           });
         } catch (err) {
-          console.error(`[${name}] Channel message error:`, err);
+          console.error(`[${name}] Channel message error (${Date.now() - t0}ms):`, err);
           bus!.publishOutbound({
             channel: inMsg.channel,
             chatId: inMsg.chatId,

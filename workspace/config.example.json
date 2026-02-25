@@ -14,5 +14,28 @@
     "port": 4000,
     "host": "0.0.0.0",
     "name": "NanoSwarm"
+  },
+  "channels": {
+    "telegram": {
+      "enabled": false,
+      "token": "${TELEGRAM_BOT_TOKEN}",
+      "allowFrom": [],
+      "adminUsers": [],
+      "proxy": "",
+      "replyToMessage": false,
+      "sttProvider": "groq",
+      "sttApiKey": "${GROQ_API_KEY}",
+      "group": {
+        "requireMention": true,
+        "policy": "open",
+        "cooldownSeconds": 0
+      },
+      "accounts": {
+        "finance": {
+          "token": "${TELEGRAM_FINANCE_BOT_TOKEN}",
+          "boundAgent": "finance-agent"
+        }
+      }
+    }
   }
 }

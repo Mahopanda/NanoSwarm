@@ -20,4 +20,7 @@ export { ChannelManager } from './channel-manager.ts';
 
 // Built-in channels
 export { CLIChannel, type CLIChannelConfig } from './cli-channel.ts';
-export { TelegramChannel, type TelegramChannelConfig, markdownToTelegramHtml, splitMessage } from './telegram/index.ts';
+export { TelegramChannel, type TelegramChannelConfig, type TelegramBotAccount, markdownToTelegramHtml, splitMessage } from './telegram/index.ts';
+export { GroupFilter, type TelegramGroupConfig } from './telegram/index.ts';
+export { type STTProvider, GroqSTTProvider, createSTTProvider } from './telegram/index.ts';
+export { downloadTelegramFile, getMediaDir, type MediaType, type DownloadedMedia } from './telegram/index.ts';
