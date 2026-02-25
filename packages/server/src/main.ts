@@ -256,6 +256,8 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
       while (true) {
         const inMsg: InboundMessage = await bus!.consumeInbound();
         const conversationId = sessionKey(inMsg);
+        const t0 = Date.now();
+        console.log(`[${name}] ← ${inMsg.channel} (${inMsg.senderId}) "${inMsg.content.slice(0, 80)}"`);
 
         const normalized: NormalizedMessage = {
           channelId: inMsg.channel,
@@ -267,6 +269,8 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
 
         try {
           const response = await orchestrator.handle(normalized);
+          const ms = Date.now() - t0;
+          console.log(`[${name}] → ${inMsg.channel} (${ms}ms) "${response.text.slice(0, 80)}"`);
           bus!.publishOutbound({
             channel: inMsg.channel,
             chatId: inMsg.chatId,
@@ -276,7 +280,7 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
             metadata: response.metadata ?? {},
           });
         } catch (err) {
-          console.error(`[${name}] Channel message error:`, err);
+          console.error(`[${name}] Channel message error (${Date.now() - t0}ms):`, err);
           bus!.publishOutbound({
             channel: inMsg.channel,
             chatId: inMsg.chatId,

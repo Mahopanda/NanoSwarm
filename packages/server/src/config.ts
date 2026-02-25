@@ -67,6 +67,10 @@ export interface NanoSwarmConfig {
       }>;
     };
   };
+  stores?: {
+    type: 'sqlite' | 'file';
+    sqlitePath?: string;
+  };
   tools?: {
     web?: { search?: { apiKey: string } };
     exec?: { timeout?: number };
