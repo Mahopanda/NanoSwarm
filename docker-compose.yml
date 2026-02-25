@@ -1,5 +1,7 @@
 x-common: &common
   build: .
+  environment:
+    - TZ=${TZ:-UTC}
   volumes:
     - "${NANOSWARM_HOME:-~/.nanoswarm}:/home/bun/.nanoswarm"
 
