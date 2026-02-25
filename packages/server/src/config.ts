@@ -32,7 +32,8 @@ export interface NanoSwarmConfig {
   externalAgents?: ExternalAgentRef[];
   channels?: {
     cli?: { enabled: boolean; prompt?: string; allowFrom?: string[] };
-    telegram?: { enabled: boolean; token: string; allowFrom?: string[]; adminUsers?: string[] };
+    telegram?: { enabled: boolean; token: string; allowFrom?: string[]; adminUsers?: string[]; proxy?: string; sttProvider?: 'groq' | 'whisper'; sttApiKey?: string; group?: { requireMention?: boolean; policy?: 'open' | 'allowlist' | 'disabled'; allowGroups?: string[]; cooldownSeconds?: number }; mediaDir?: string; replyToMessage?: boolean };
+    telegramBots?: Array<{ enabled: boolean; token: string; botId: string; boundAgent: string; allowFrom?: string[]; proxy?: string; sttProvider?: 'groq' | 'whisper'; sttApiKey?: string; group?: { requireMention?: boolean; policy?: 'open' | 'allowlist' | 'disabled'; allowGroups?: string[]; cooldownSeconds?: number }; mediaDir?: string; replyToMessage?: boolean }>;
   };
   tools?: {
     web?: { search?: { apiKey: string } };

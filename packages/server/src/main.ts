@@ -230,6 +230,15 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
       channelManager.register(telegramChannel);
     }
 
+    // Sub-bots: each gets its own TelegramChannel with a bound agent
+    if (config.channels.telegramBots) {
+      for (const botConfig of config.channels.telegramBots) {
+        if (!botConfig.enabled) continue;
+        const subBot = new TelegramChannel(botConfig, bus);
+        channelManager.register(subBot);
+      }
+    }
+
     // Inbound consumer loop: bus → orchestrator → bus.outbound
     const consumeInbound = async () => {
       while (true) {
@@ -250,6 +259,7 @@ export async function createServer(config: ServerConfig): Promise<NanoSwarmServe
             channel: inMsg.channel,
             chatId: inMsg.chatId,
             content: response.text,
+            replyTo: inMsg.metadata['messageId'] != null ? String(inMsg.metadata['messageId']) : undefined,
             media: [],
             metadata: response.metadata ?? {},
           });

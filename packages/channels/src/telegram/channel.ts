@@ -4,6 +4,9 @@ import type { MessageBus } from '../bus.ts';
 import type { OutboundMessage } from '../messages.ts';
 import type { AdminProvider } from '../admin.ts';
 import { markdownToTelegramHtml, splitMessage } from './format.ts';
+import { downloadTelegramFile, type MediaType } from './media.ts';
+import { createSTTProvider, type STTProvider } from './stt.ts';
+import { GroupFilter, type TelegramGroupConfig } from './group.ts';
 
 export interface TelegramChannelConfig extends ChannelConfig {
   token: string;
@@ -12,19 +15,28 @@ export interface TelegramChannelConfig extends ChannelConfig {
   sttProvider?: 'groq' | 'whisper';
   sttApiKey?: string;
   adminUsers?: string[];
+  group?: TelegramGroupConfig;
+  mediaDir?: string;
+  botId?: string;
+  boundAgent?: string;
 }
 
 export class TelegramChannel extends BaseChannel {
-  readonly name = 'telegram';
+  readonly name: string;
   private bot: Bot | null = null;
   private typingIntervals = new Map<string, ReturnType<typeof setInterval>>();
+  private typingActions = new Map<string, string>();
   private adminProvider: AdminProvider | null = null;
+  private sttProvider: STTProvider | null = null;
+  private groupFilter: GroupFilter | null = null;
 
   constructor(
     protected override config: TelegramChannelConfig,
     bus: MessageBus,
   ) {
     super(config, bus);
+    // Dynamic name: 'telegram' for primary, 'telegram.{botId}' for sub-bots
+    this.name = config.botId ? `telegram.${config.botId}` : 'telegram';
   }
 
   setAdminProvider(provider: AdminProvider): void {
@@ -32,18 +44,45 @@ export class TelegramChannel extends BaseChannel {
   }
 
   async start(): Promise<void> {
+    // Proxy: Bun/Node fetch reads HTTPS_PROXY env var automatically
+    if (this.config.proxy && !process.env['HTTPS_PROXY']) {
+      process.env['HTTPS_PROXY'] = this.config.proxy;
+    }
+
     this.bot = new Bot(this.config.token);
 
+    // Initialize STT
+    this.sttProvider = createSTTProvider(this.config.sttProvider, this.config.sttApiKey);
+
+    // Initialize group filter
+    if (this.config.group) {
+      this.groupFilter = new GroupFilter(this.config.group);
+    }
+
+    // Commands — sub-bots get a smaller set
     this.bot.command('start', (ctx) => this.onStart(ctx));
     this.bot.command('new', (ctx) => this.onNew(ctx));
     this.bot.command('help', (ctx) => this.onHelp(ctx));
-    this.bot.command('status', (ctx) => this.onStatus(ctx));
-    this.bot.command('cancel', (ctx) => this.onCancel(ctx));
-    this.bot.command('logs', (ctx) => this.onLogs(ctx));
-    this.bot.command('restart', (ctx) => this.onRestart(ctx));
+
+    if (!this.config.boundAgent) {
+      // Admin commands only on primary bot
+      this.bot.command('status', (ctx) => this.onStatus(ctx));
+      this.bot.command('cancel', (ctx) => this.onCancel(ctx));
+      this.bot.command('logs', (ctx) => this.onLogs(ctx));
+      this.bot.command('restart', (ctx) => this.onRestart(ctx));
+    }
+
     this.bot.on('message', (ctx) => this.onMessage(ctx));
 
-    this.bot.start();
+    // Get bot identity for group mention detection
+    const me = await this.bot.api.getMe();
+    if (this.groupFilter) {
+      this.groupFilter.init(me.username ?? '', me.id);
+    }
+
+    this.bot.start({
+      allowed_updates: ['message', 'callback_query'],
+    });
     this.running = true;
   }
 
@@ -53,6 +92,7 @@ export class TelegramChannel extends BaseChannel {
       clearInterval(interval);
     }
     this.typingIntervals.clear();
+    this.typingActions.clear();
     await this.bot?.stop();
     this.bot = null;
   }
@@ -67,7 +107,14 @@ export class TelegramChannel extends BaseChannel {
     // Send media files if any
     for (const mediaPath of msg.media) {
       try {
-        await this.bot.api.sendDocument(chatId, mediaPath);
+        // Detect media type from extension for appropriate send method
+        if (/\.(jpg|jpeg|png|gif|webp)$/i.test(mediaPath)) {
+          await this.bot.api.sendPhoto(chatId, mediaPath);
+        } else if (/\.(ogg|opus)$/i.test(mediaPath)) {
+          await this.bot.api.sendVoice(chatId, mediaPath);
+        } else {
+          await this.bot.api.sendDocument(chatId, mediaPath);
+        }
       } catch {
         // Ignore media send errors
       }
@@ -103,17 +150,24 @@ export class TelegramChannel extends BaseChannel {
   }
 
   private async onStart(ctx: Context): Promise<void> {
-    await ctx.reply(
-      'Welcome to NanoSwarm! Send me a message to start chatting.\n\n'
-      + 'Commands:\n'
-      + '/new - Start a new conversation\n'
-      + '/help - Show this help message\n\n'
-      + 'Admin commands:\n'
-      + '/status - System health (admin only)\n'
-      + '/cancel [id] - Cancel a running task (admin only)\n'
-      + '/logs [N|error] - View recent logs (admin only)\n'
-      + '/restart - Restart the service (admin only)',
-    );
+    const lines = [
+      'Welcome to NanoSwarm! Send me a message to start chatting.',
+      '',
+      'Commands:',
+      '/new - Start a new conversation',
+      '/help - Show this help message',
+    ];
+    if (!this.config.boundAgent) {
+      lines.push(
+        '',
+        'Admin commands:',
+        '/status - System health (admin only)',
+        '/cancel [id] - Cancel a running task (admin only)',
+        '/logs [N|error] - View recent logs (admin only)',
+        '/restart - Restart the service (admin only)',
+      );
+    }
+    await ctx.reply(lines.join('\n'));
   }
 
   private async onNew(ctx: Context): Promise<void> {
@@ -128,18 +182,27 @@ export class TelegramChannel extends BaseChannel {
   }
 
   private async onHelp(ctx: Context): Promise<void> {
-    await ctx.reply(
-      'NanoSwarm Bot\n\n'
-      + 'Send any text message to chat with the agent.\n\n'
-      + 'Commands:\n'
-      + '/new - Start a new conversation\n'
-      + '/help - Show help\n\n'
-      + 'Admin commands:\n'
-      + '/status - System health (admin only)\n'
-      + '/cancel [id] - Cancel a running task (admin only)\n'
-      + '/logs [N|error] - View recent logs (admin only)\n'
-      + '/restart - Restart the service (admin only)',
-    );
+    const lines = [
+      'NanoSwarm Bot',
+      '',
+      'Send any text message to chat with the agent.',
+      'You can also send photos, voice messages, audio files, and documents.',
+      '',
+      'Commands:',
+      '/new - Start a new conversation',
+      '/help - Show help',
+    ];
+    if (!this.config.boundAgent) {
+      lines.push(
+        '',
+        'Admin commands:',
+        '/status - System health (admin only)',
+        '/cancel [id] - Cancel a running task (admin only)',
+        '/logs [N|error] - View recent logs (admin only)',
+        '/restart - Restart the service (admin only)',
+      );
+    }
+    await ctx.reply(lines.join('\n'));
   }
 
   private async onStatus(ctx: Context): Promise<void> {
@@ -256,30 +319,114 @@ export class TelegramChannel extends BaseChannel {
   private async onMessage(ctx: Context): Promise<void> {
     const chatId = String(ctx.chat?.id ?? '');
     const senderId = this.extractSenderId(ctx);
-    const text = ctx.message?.text ?? '';
 
-    // Skip non-text messages (stickers, voice, photos, etc.)
-    if (!text) {
-      const msg = ctx.message;
-      if (msg && ('sticker' in msg || 'voice' in msg || 'photo' in msg || 'video' in msg || 'animation' in msg)) {
-        try {
-          await ctx.reply('Sorry, I can only process text messages at the moment.');
-        } catch {
-          // Ignore reply errors
+    // Group filter — check before processing
+    if (this.groupFilter && !this.groupFilter.shouldRespond(ctx)) {
+      return;
+    }
+
+    const msg = ctx.message;
+    if (!msg) return;
+
+    const contentParts: string[] = [];
+    const mediaPaths: string[] = [];
+
+    // Determine media file and type
+    let mediaFileId: string | undefined;
+    let mediaType: MediaType | undefined;
+    let mimeType: string | undefined;
+    let fileName: string | undefined;
+
+    if (msg.photo && msg.photo.length > 0) {
+      // Pick the largest resolution (last element)
+      const photo = msg.photo[msg.photo.length - 1];
+      mediaFileId = photo.file_id;
+      mediaType = 'image';
+    } else if (msg.sticker) {
+      mediaFileId = msg.sticker.file_id;
+      mediaType = 'sticker';
+    } else if (msg.voice) {
+      mediaFileId = msg.voice.file_id;
+      mediaType = 'voice';
+      mimeType = msg.voice.mime_type;
+    } else if (msg.audio) {
+      mediaFileId = msg.audio.file_id;
+      mediaType = 'audio';
+      mimeType = msg.audio.mime_type;
+      fileName = msg.audio.file_name;
+    } else if (msg.document) {
+      mediaFileId = msg.document.file_id;
+      mediaType = 'file';
+      mimeType = msg.document.mime_type;
+      fileName = msg.document.file_name;
+    }
+
+    // Download media if present
+    if (mediaFileId && mediaType && this.bot) {
+      try {
+        const downloaded = await downloadTelegramFile(this.bot, mediaFileId, mediaType, {
+          mimeType,
+          fileName,
+          mediaDir: this.config.mediaDir,
+        });
+
+        if (mediaType === 'sticker') {
+          // Stickers are described as text, not forwarded as media
+          contentParts.push('[Sticker]');
+        } else if (mediaType === 'voice' || mediaType === 'audio') {
+          // Try STT transcription
+          let transcription = '';
+          if (this.sttProvider) {
+            try {
+              transcription = await this.sttProvider.transcribe(downloaded.path);
+            } catch (err) {
+              console.error(`[${this.name}] STT error:`, err);
+            }
+          }
+          if (transcription) {
+            contentParts.push(`[transcription: ${transcription}]`);
+          } else {
+            contentParts.push('[Audio message attached]');
+          }
+          mediaPaths.push(downloaded.path);
+        } else {
+          // image, file
+          mediaPaths.push(downloaded.path);
         }
+      } catch (err) {
+        console.error(`[${this.name}] Media download error:`, err);
       }
+    }
+
+    // Add text content (or caption for media messages)
+    let text = msg.text ?? msg.caption ?? '';
+
+    // Strip @mention from group messages
+    if (this.groupFilter && text) {
+      text = this.groupFilter.stripMention(text);
+    }
+
+    if (text) {
+      contentParts.push(text);
+    }
+
+    // Skip if no content at all
+    const content = contentParts.join('\n');
+    if (!content && mediaPaths.length === 0) {
       return;
     }
 
     // Start typing indicator
-    this.startTyping(chatId);
+    this.startTyping(chatId, mediaPaths.length > 0 ? 'upload_photo' : 'typing');
 
     await this.handleMessage({
       senderId,
       chatId,
-      content: text,
+      content: content || '[Media attached]',
+      media: mediaPaths,
       metadata: {
-        messageId: ctx.message?.message_id,
+        messageId: msg.message_id,
+        ...(this.config.boundAgent ? { agentId: this.config.boundAgent } : {}),
       },
     });
   }
@@ -294,10 +441,12 @@ export class TelegramChannel extends BaseChannel {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  private startTyping(chatId: string): void {
+  private startTyping(chatId: string, action = 'typing'): void {
     this.stopTyping(chatId);
+    this.typingActions.set(chatId, action);
     const send = () => {
-      this.bot?.api.sendChatAction(chatId, 'typing').catch(() => {});
+      const a = this.typingActions.get(chatId) ?? 'typing';
+      this.bot?.api.sendChatAction(chatId, a as 'typing').catch(() => {});
     };
     send();
     this.typingIntervals.set(chatId, setInterval(send, 4000));
@@ -309,5 +458,6 @@ export class TelegramChannel extends BaseChannel {
       clearInterval(interval);
       this.typingIntervals.delete(chatId);
     }
+    this.typingActions.delete(chatId);
   }
 }
