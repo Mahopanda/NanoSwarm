@@ -96,6 +96,19 @@ export class TelegramChannel extends BaseChannel {
       this.groupFilter.init(me.username ?? '', me.id);
     }
 
+    // Register command menu in Telegram UI
+    const commands = [
+      { command: 'new', description: '開始新對話' },
+      { command: 'help', description: '顯示可用指令' },
+    ];
+    if (!this.config.boundAgent) {
+      commands.push(
+        { command: 'status', description: '查看系統狀態' },
+        { command: 'logs', description: '查看最近日誌' },
+      );
+    }
+    await this.bot.api.setMyCommands(commands);
+
     this.bot.start({
       allowed_updates: ['message', 'callback_query'],
     });
