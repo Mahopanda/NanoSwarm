@@ -38,6 +38,30 @@ export class CronService {
     channel?: string;
     to?: string;
   }): CronJob {
+    // Dedup: if a job with the same schedule + channel + to already exists, update it instead
+    const existing = this.store.jobs.find((j) => {
+      if (j.schedule.kind !== opts.schedule.kind) return false;
+      if (j.payload.channel !== opts.channel || j.payload.to !== opts.to) return false;
+      switch (opts.schedule.kind) {
+        case 'at':
+          return j.schedule.atMs === opts.schedule.atMs;
+        case 'every':
+          return j.schedule.everyMs === opts.schedule.everyMs;
+        case 'cron':
+          return j.schedule.expr === opts.schedule.expr;
+        default:
+          return false;
+      }
+    });
+
+    if (existing) {
+      existing.name = opts.name;
+      existing.payload.message = opts.message;
+      existing.updatedAtMs = Date.now();
+      this.saveStore().catch((err) => console.error('[CronService] Failed to save store:', err));
+      return existing;
+    }
+
     const now = Date.now();
     const job: CronJob = {
       id: randomBytes(4).toString('hex'),
@@ -77,6 +101,34 @@ export class CronService {
     this.saveStore().catch((err) => console.error('[CronService] Failed to save store:', err));
     this.armTimer();
     return true;
+  }
+
+  updateJob(
+    jobId: string,
+    opts: {
+      name?: string;
+      message?: string;
+      schedule?: CronSchedule;
+      enabled?: boolean;
+    },
+  ): CronJob | undefined {
+    const job = this.store.jobs.find((j) => j.id === jobId);
+    if (!job) return undefined;
+
+    if (opts.name !== undefined) job.name = opts.name;
+    if (opts.message !== undefined) job.payload.message = opts.message;
+    if (opts.enabled !== undefined) job.enabled = opts.enabled;
+    if (opts.schedule !== undefined) {
+      job.schedule = opts.schedule;
+      job.state.nextRunAtMs = job.enabled
+        ? this.computeNextRun(opts.schedule, Date.now())
+        : undefined;
+    }
+
+    job.updatedAtMs = Date.now();
+    this.saveStore().catch((err) => console.error('[CronService] Failed to save store:', err));
+    this.armTimer();
+    return job;
   }
 
   enableJob(jobId: string, enabled: boolean): CronJob | undefined {

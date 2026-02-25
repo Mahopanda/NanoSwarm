@@ -123,6 +123,138 @@ describe('CronService', () => {
     });
   });
 
+  describe('updateJob', () => {
+    it('should update name and message', () => {
+      const job = service.addJob({
+        name: '警報',
+        schedule: { kind: 'every', everyMs: 5000 },
+        message: '這是警報',
+      });
+
+      const updated = service.updateJob(job.id, { name: '提醒', message: '這是提醒' });
+      expect(updated?.name).toBe('提醒');
+      expect(updated?.payload.message).toBe('這是提醒');
+      expect(updated?.updatedAtMs).toBeGreaterThanOrEqual(job.updatedAtMs);
+    });
+
+    it('should update schedule and recompute nextRunAtMs', () => {
+      const job = service.addJob({
+        name: 'test',
+        schedule: { kind: 'every', everyMs: 5000 },
+        message: 'msg',
+      });
+
+      const oldNext = job.state.nextRunAtMs;
+      const updated = service.updateJob(job.id, {
+        schedule: { kind: 'every', everyMs: 60000 },
+      });
+
+      expect(updated?.schedule.everyMs).toBe(60000);
+      expect(updated?.state.nextRunAtMs).not.toBe(oldNext);
+    });
+
+    it('should update enabled field', () => {
+      const job = service.addJob({
+        name: 'test',
+        schedule: { kind: 'every', everyMs: 5000 },
+        message: 'msg',
+      });
+
+      const updated = service.updateJob(job.id, { enabled: false });
+      expect(updated?.enabled).toBe(false);
+    });
+
+    it('should return undefined for non-existent job', () => {
+      expect(service.updateJob('nonexistent', { name: 'x' })).toBeUndefined();
+    });
+  });
+
+  describe('addJob dedup', () => {
+    it('should return existing job when schedule+channel+to match', () => {
+      const job1 = service.addJob({
+        name: '警報',
+        schedule: { kind: 'every', everyMs: 5000 },
+        message: '舊訊息',
+        channel: 'telegram',
+        to: 'user1',
+      });
+
+      const job2 = service.addJob({
+        name: '提醒',
+        schedule: { kind: 'every', everyMs: 5000 },
+        message: '新訊息',
+        channel: 'telegram',
+        to: 'user1',
+      });
+
+      expect(job2.id).toBe(job1.id);
+      expect(job2.name).toBe('提醒');
+      expect(job2.payload.message).toBe('新訊息');
+      expect(service.listJobs()).toHaveLength(1);
+    });
+
+    it('should create new job when schedule differs', () => {
+      service.addJob({
+        name: 'j1',
+        schedule: { kind: 'every', everyMs: 5000 },
+        message: 'm1',
+        channel: 'telegram',
+        to: 'user1',
+      });
+
+      service.addJob({
+        name: 'j2',
+        schedule: { kind: 'every', everyMs: 10000 },
+        message: 'm2',
+        channel: 'telegram',
+        to: 'user1',
+      });
+
+      expect(service.listJobs()).toHaveLength(2);
+    });
+
+    it('should create new job when channel differs', () => {
+      service.addJob({
+        name: 'j1',
+        schedule: { kind: 'every', everyMs: 5000 },
+        message: 'm1',
+        channel: 'telegram',
+        to: 'user1',
+      });
+
+      service.addJob({
+        name: 'j2',
+        schedule: { kind: 'every', everyMs: 5000 },
+        message: 'm2',
+        channel: 'discord',
+        to: 'user1',
+      });
+
+      expect(service.listJobs()).toHaveLength(2);
+    });
+
+    it('should dedup cron-expression jobs with same expr', () => {
+      const job1 = service.addJob({
+        name: 'j1',
+        schedule: { kind: 'cron', expr: '0 9 * * *' },
+        message: 'old',
+        channel: 'ch',
+        to: 'u',
+      });
+
+      const job2 = service.addJob({
+        name: 'j2',
+        schedule: { kind: 'cron', expr: '0 9 * * *' },
+        message: 'new',
+        channel: 'ch',
+        to: 'u',
+      });
+
+      expect(job2.id).toBe(job1.id);
+      expect(service.listJobs()).toHaveLength(1);
+    });
+  });
+
   describe('computeNextRun', () => {
     it('should compute next run for at schedule', () => {
       const futureMs = Date.now() + 60000;

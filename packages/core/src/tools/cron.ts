@@ -10,15 +10,15 @@ export function createCronTool(service: CronService): NanoTool {
       'Schedule reminders, recurring tasks, and periodic agent jobs. ' +
       "Set task_type='direct' for simple reminders (message sent as-is). " +
       "Set task_type='agent' for complex tasks that need agent processing (web_search, etc.). " +
-      'Actions: add, list, remove.',
+      'Actions: add, list, remove, update.',
     parameters: z.object({
-      action: z.enum(['add', 'list', 'remove']).describe('The action to perform'),
+      action: z.enum(['add', 'list', 'remove', 'update']).describe('The action to perform'),
       message: z.string().optional().describe('Message or instruction for the agent to execute when the job fires (for add). Can be a simple reminder or a complex instruction.'),
       every_seconds: z.number().optional().describe('Run every N seconds (for add with interval schedule)'),
       cron_expr: z.string().optional().describe('Cron expression (for add with cron schedule)'),
       tz: z.string().optional().describe('Timezone for cron expression (e.g., "Asia/Taipei")'),
       at: z.string().optional().describe('ISO datetime string for one-time execution (for add with at schedule)'),
-      job_id: z.string().optional().describe('Job ID (required for remove)'),
+      job_id: z.string().optional().describe('Job ID (required for remove and update)'),
       task_type: z.enum(['direct', 'agent']).optional().describe("Job type: 'direct' sends the message as-is (for reminders), 'agent' processes through the agent loop (for complex tasks). Default: direct"),
     }),
     execute: async (params, context) => {
@@ -78,6 +78,40 @@ export function createCronTool(service: CronService): NanoTool {
           }
           const removed = service.removeJob(params.job_id);
           return removed ? `Job ${params.job_id} removed` : `Job ${params.job_id} not found`;
+        }
+
+        case 'update': {
+          if (!params.job_id) {
+            return 'Error: job_id is required for update action';
+          }
+
+          const updateOpts: {
+            name?: string;
+            message?: string;
+            schedule?: CronSchedule;
+            enabled?: boolean;
+          } = {};
+
+          if (params.message !== undefined) {
+            updateOpts.message = params.message;
+            updateOpts.name = params.message.slice(0, 50);
+          }
+
+          if (params.every_seconds) {
+            updateOpts.schedule = { kind: 'every', everyMs: params.every_seconds * 1000 };
+          } else if (params.cron_expr) {
+            updateOpts.schedule = { kind: 'cron', expr: params.cron_expr, tz: params.tz };
+          } else if (params.at) {
+            const atMs = Date.parse(params.at);
+            if (isNaN(atMs)) {
+              return 'Error: invalid datetime format for "at"';
+            }
+            updateOpts.schedule = { kind: 'at', atMs };
+          }
+
+          const updated = service.updateJob(params.job_id, updateOpts);
+          if (!updated) return `Job ${params.job_id} not found`;
+          return `Job updated: ${updated.id} (${updated.name})`;
         }
 
         default:
